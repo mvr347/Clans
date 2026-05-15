@@ -1,0 +1,51 @@
+name: Clans
+version: '${project.version}'
+main: me.lovelace.clans.ClansPlugin
+api-version: '1.21.11'
+load: POSTWORLD
+authors: [ lovelace ]
+description: Full-featured clans, guild wars, territories and AdvancedClaims integration.
+softdepend:
+  - PlaceholderAPI
+  - AdvancedClaims
+
+commands:
+  clan:
+    description: Main clans command.
+    usage: /clan
+    aliases: [ c ]
+    permission: clans.command
+
+permissions:
+  clans.command:
+    default: true
+  clans.create:
+    default: true
+  clans.disband:
+    default: true
+  clans.invite:
+    default: true
+  clans.accept:
+    default: true
+  clans.leave:
+    default: true
+  clans.kick:
+    default: true
+  clans.rank:
+    default: true
+  clans.claim:
+    default: true
+  clans.unclaim:
+    default: true
+  clans.menu:
+    default: true
+  clans.chest:
+    default: true
+  clans.ritual:
+    default: true
+  clans.war:
+    default: true
+  clans.diplomacy:
+    default: true
+  clans.admin:
+    default: op

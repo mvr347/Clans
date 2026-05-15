@@ -1,0 +1,96 @@
+database:
+  type: SQLITE # SQLITE or MYSQL
+  pool-size: 4
+  mysql:
+    host: localhost
+    port: 3306
+    database: minecraft
+    username: root
+    password: ""
+    use-ssl: false
+    properties:
+      cachePrepStmts: true
+      prepStmtCacheSize: 250
+      prepStmtCacheSqlLimit: 2048
+
+clans:
+  tag:
+    min-length: 2
+    max-length: 6
+    pattern: "^[A-Za-z0-9_]+$"
+  name:
+    min-length: 3
+    max-length: 32
+  default-tag-color: "<gold>"
+  default-emblem: WHITE_BANNER
+  invite-expire-seconds: 120
+  friendly-fire: false
+
+limits:
+  max-level: 20
+  base-members: 10
+  members-per-upgrade: 3
+  base-territories: 4
+  territories-per-level: 1
+  base-chest-rows: 3
+  max-chest-rows: 6
+
+leveling:
+  base-exp: 1000
+  multiplier: 1.35
+  territory-claim-exp: 150
+  war-win-exp: 1200
+  ritual-exp: 250
+
+mechanics:
+  spirit:
+    enabled: true
+    tick-seconds: 15
+    base-radius: 48
+    level-radius-bonus: 4
+    buffs:
+      1:
+        - "SPEED:0"
+      5:
+        - "SPEED:1"
+        - "HASTE:0"
+      10:
+        - "SPEED:1"
+        - "HASTE:1"
+        - "RESISTANCE:0"
+      15:
+        - "SPEED:2"
+        - "HASTE:1"
+        - "RESISTANCE:0"
+      20:
+        - "SPEED:2"
+        - "HASTE:2"
+        - "RESISTANCE:1"
+  rituals:
+    cooldown-hours: 24
+    duration-seconds: 600
+  succession:
+    offline-days-trigger: 14
+    vote-duration-hours: 48
+    quorum-percent: 50
+  artifacts:
+    war-horn-cooldown-seconds: 300
+
+integration:
+  advanced-claims:
+    enabled: true
+    auto-claim-chunk: true
+    api-class: "me.lovelace.advancedclaims.api.AdvancedClaimsAPI"
+    trust-level-class: "me.lovelace.advancedclaims.model.TrustLevel"
+    trust-mapping:
+      GUILDMASTER: OWNER
+      ASSISTANT: BUILD
+      MEMBER: INTERACT
+    # Reflection method candidates are resolved automatically. Keep this block for forks.
+    methods:
+      get-instance: getInstance
+      create-claim: createClaim
+      delete-claim: deleteClaim
+      get-claim-by-id: getClaimById
+      add-player: addPlayerToClaim
+      remove-player: removePlayerFromClaim
