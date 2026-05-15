@@ -1,0 +1,68 @@
+prefix: "<gray>[<gradient:#f6d365:#fda085>Clans</gradient>]</gray> "
+
+general:
+  no-permission: "<prefix><red>У вас нет прав для этого действия."
+  players-only: "<prefix><red>Эта команда доступна только игроку."
+  player-not-found: "<prefix><red>Игрок <white><player></white> не найден."
+  invalid-number: "<prefix><red>Ожидалось число."
+  unknown-command: "<prefix><red>Неизвестная подкоманда. Используйте <white>/clan help</white>."
+  reloaded: "<prefix><green>Конфиги перезагружены."
+  error: "<prefix><red>Операция не выполнена: <white><reason></white>"
+
+clan:
+  help: "<prefix><gray>/clan create <tag> <name>, /clan invite <player>, /clan claim, /clan menu"
+  created: "<prefix><green>Клан <white><tag></white> создан."
+  disbanded: "<prefix><red>Клан распущен."
+  already-in-clan: "<prefix><red>Вы уже состоите в клане."
+  not-in-clan: "<prefix><red>Вы не состоите в клане."
+  not-leader: "<prefix><red>Это доступно только гильдмастеру."
+  rank-too-low: "<prefix><red>Ваш ранг недостаточен."
+  tag-exists: "<prefix><red>Тег уже занят."
+  invalid-tag: "<prefix><red>Тег должен быть длиной <min>-<max> и содержать только латиницу, цифры или _."
+  invalid-name: "<prefix><red>Название должно быть длиной <min>-<max>."
+  invited: "<prefix><green>Приглашение отправлено игроку <white><player></white>."
+  invite-received: "<prefix><yellow>Вас пригласили в клан <white><tag></white>. Принять: <white>/clan accept <tag></white>"
+  invite-missing: "<prefix><red>Активное приглашение не найдено."
+  member-limit-reached: "<prefix><red>Достигнут лимит участников клана."
+  joined: "<prefix><green>Вы вступили в клан <white><tag></white>."
+  member-joined: "<prefix><green><player> вступил в клан."
+  left: "<prefix><yellow>Вы покинули клан."
+  kicked: "<prefix><yellow>Игрок <white><player></white> исключён."
+  rank-changed: "<prefix><green>Ранг игрока <white><player></white>: <rank>."
+  info: "<prefix><tag> <gray>|</gray> <name> <gray>| уровень</gray> <level> <gray>| участники</gray> <members>/<max_members>"
+
+territory:
+  claimed: "<prefix><green>Чанк захвачен для клана."
+  unclaimed: "<prefix><yellow>Чанк освобождён."
+  already-claimed: "<prefix><red>Этот чанк уже принадлежит клану <white><tag></white>."
+  not-claimed: "<prefix><red>Этот чанк не принадлежит вашему клану."
+  limit-reached: "<prefix><red>Достигнут лимит территорий."
+  protected: "<prefix><red>Это территория клана <white><tag></white>."
+
+war:
+  started: "<prefix><red>Война началась: <attacker> против <defender>."
+  ended: "<prefix><yellow>Война завершена."
+  already-at-war: "<prefix><red>Эти кланы уже воюют."
+  not-found: "<prefix><red>Клан-противник не найден."
+
+ritual:
+  started: "<prefix><light_purple>Ритуал <white><ritual></white> начат."
+  cooldown: "<prefix><red>Ритуал будет доступен через <time>."
+
+spirit:
+  buff: "<prefix><aqua>Дух клана усиливает вас на своей территории."
+
+diplomacy:
+  updated: "<prefix><green>Отношение к клану <white><tag></white>: <relation>."
+
+succession:
+  vote-started: "<prefix><yellow>Запущено голосование за нового гильдмастера."
+  voted: "<prefix><green>Голос принят."
+  promoted: "<prefix><gold><player> стал новым гильдмастером клана."
+
+gui:
+  main-title: "<dark_gray>Клан <tag>"
+  members-title: "<dark_gray>Участники <tag>"
+  territories-title: "<dark_gray>Территории <tag>"
+  upgrades-title: "<dark_gray>Улучшения <tag>"
+  chest-title: "<dark_gray>Клан-сундук <tag>"
