@@ -1,6 +1,7 @@
 package me.lovelace.clans.storage;
 
 import me.lovelace.clans.model.Clan;
+import me.lovelace.clans.model.ClanApplication;
 import me.lovelace.clans.model.ClanMember;
 import me.lovelace.clans.model.ClanTerritory;
 import me.lovelace.clans.model.ClanUpgrade;
@@ -31,7 +32,12 @@ public interface ClanStorage {
 
     CompletableFuture<Void> saveUpgradeAsync(UUID clanId, ClanUpgrade upgrade, int level);
 
-    CompletableFuture<Optional<byte[]>> loadClanChestAsync(UUID clanId);
+    // Clan Applications
+    CompletableFuture<Collection<ClanApplication>> loadAllApplicationsAsync();
 
-    CompletableFuture<Void> saveClanChestAsync(UUID clanId, byte[] content);
+    CompletableFuture<Void> saveApplicationAsync(ClanApplication application);
+
+    CompletableFuture<Void> deleteApplicationAsync(UUID clanId, UUID applicantId);
+
+    CompletableFuture<Void> deleteAllApplicationsForClanAsync(UUID clanId);
 }

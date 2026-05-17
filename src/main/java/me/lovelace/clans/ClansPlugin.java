@@ -6,12 +6,14 @@ import me.lovelace.clans.gui.ClanGuiManager;
 import me.lovelace.clans.integration.AdvancedClaimsHook;
 import me.lovelace.clans.integration.PlaceholderAPIHook;
 import me.lovelace.clans.listener.ArtifactListener;
+import me.lovelace.clans.listener.ChatInputListener;
 import me.lovelace.clans.listener.ClanProtectionListener;
 import me.lovelace.clans.listener.CombatListener;
 import me.lovelace.clans.listener.PlayerConnectionListener;
+import me.lovelace.clans.listener.QuestListener; // New import for QuestListener
 import me.lovelace.clans.manager.ArtifactManager;
-import me.lovelace.clans.manager.ClanChestManager;
 import me.lovelace.clans.manager.ClanManager;
+import me.lovelace.clans.manager.QuestManager; // New import
 import me.lovelace.clans.manager.RitualManager;
 import me.lovelace.clans.manager.SpiritManager;
 import me.lovelace.clans.manager.SuccessionManager;
@@ -20,6 +22,7 @@ import me.lovelace.clans.service.MessageService;
 import me.lovelace.clans.storage.ClanStorage;
 import me.lovelace.clans.storage.DatabaseManager;
 import me.lovelace.clans.storage.SqlClanStorage;
+import me.lovelace.clans.storage.SqlQuestStorage; // New import
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -30,8 +33,13 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public final class ClansPlugin extends JavaPlugin {
@@ -43,11 +51,14 @@ public final class ClansPlugin extends JavaPlugin {
     private RitualManager ritualManager;
     private SuccessionManager successionManager;
     private SpiritManager spiritManager;
-    private ClanChestManager clanChestManager;
     private ArtifactManager artifactManager;
+    private QuestManager questManager; // New
     private ClanGuiManager guiManager;
     private AdvancedClaimsHook advancedClaimsHook;
+    private ClanProtectionListener clanProtectionListener; // Added for glowing effect task
     private BukkitTask heartbeatTask;
+    private BukkitTask glowingEffectTask; // New task for glowing effect
+    private final Map<UUID, BiConsumer<String, Boolean>> chatInputListeners = new ConcurrentHashMap<>();
 
     @Override
     public void onEnable() {
@@ -65,13 +76,18 @@ public final class ClansPlugin extends JavaPlugin {
         ritualManager = new RitualManager(this);
         successionManager = new SuccessionManager(this);
         spiritManager = new SpiritManager(this);
-        clanChestManager = new ClanChestManager(this);
         artifactManager = new ArtifactManager(this);
+        questManager = new QuestManager(this, new SqlQuestStorage(this, databaseManager), clanManager); // Изменено здесь
         guiManager = new ClanGuiManager(this);
         advancedClaimsHook = new AdvancedClaimsHook(this);
-        advancedClaimsHook.initialize();
+        
+        // Defer AdvancedClaimsHook initialization to ensure AdvancedClaimsAPI is ready
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            advancedClaimsHook.initialize();
+        }, 1L); // Run 1 tick later
 
         clanManager.loadAsync().join();
+        questManager.loadQuests(); // New
         ClansAPI.init(this);
 
         registerCommands();
@@ -84,12 +100,22 @@ public final class ClansPlugin extends JavaPlugin {
             warManager.tick();
             ritualManager.tick();
         }, 20L * 60L, 20L * 60L);
+
+        // Start glowing effect task
+        glowingEffectTask = Bukkit.getScheduler().runTaskTimer(this, () -> {
+            if (clanProtectionListener != null) {
+                clanProtectionListener.updateGlowingPlayers();
+            }
+        }, 20L, 20L); // Run every second
     }
 
     @Override
     public void onDisable() {
         if (heartbeatTask != null) {
             heartbeatTask.cancel();
+        }
+        if (glowingEffectTask != null) { // Cancel glowing effect task
+            glowingEffectTask.cancel();
         }
         if (spiritManager != null) {
             spiritManager.stop();
@@ -127,12 +153,16 @@ public final class ClansPlugin extends JavaPlugin {
         return successionManager;
     }
 
-    public ClanChestManager getClanChestManager() {
-        return clanChestManager;
+    public SpiritManager getSpiritManager() {
+        return spiritManager;
     }
 
     public ArtifactManager getArtifactManager() {
         return artifactManager;
+    }
+
+    public QuestManager getQuestManager() { // New
+        return questManager;
     }
 
     public ClanGuiManager getGuiManager() {
@@ -188,15 +218,28 @@ public final class ClansPlugin extends JavaPlugin {
         PluginCommand command = Objects.requireNonNull(getCommand("clan"), "Command /clan is missing from plugin.yml");
         command.setExecutor(executor);
         command.setTabCompleter(executor);
+        PluginCommand diploCommand = getCommand("diplo");
+        if (diploCommand != null) {
+            diploCommand.setExecutor(executor);
+            diploCommand.setTabCompleter(executor);
+        }
+        PluginCommand clansCommand = getCommand("clans");
+        if (clansCommand != null) {
+            clansCommand.setExecutor(executor);
+            clansCommand.setTabCompleter(executor);
+        }
     }
 
     private void registerListeners() {
         PluginManager pluginManager = Bukkit.getPluginManager();
         pluginManager.registerEvents(guiManager, this);
         pluginManager.registerEvents(new PlayerConnectionListener(this), this);
-        pluginManager.registerEvents(new ClanProtectionListener(this), this);
+        clanProtectionListener = new ClanProtectionListener(this); // Store instance
+        pluginManager.registerEvents(clanProtectionListener, this);
         pluginManager.registerEvents(new CombatListener(this), this);
         pluginManager.registerEvents(new ArtifactListener(this), this);
+        pluginManager.registerEvents(new ChatInputListener(this), this);
+        pluginManager.registerEvents(new QuestListener(this, questManager, clanManager), this); // Register QuestListener
     }
 
     private void registerIntegrations() {
@@ -212,5 +255,13 @@ public final class ClansPlugin extends JavaPlugin {
             current = current.getCause();
         }
         return current;
+    }
+
+    public void expectChatInput(UUID playerId, BiConsumer<String, Boolean> callback) {
+        chatInputListeners.put(playerId, callback);
+    }
+
+    public Optional<BiConsumer<String, Boolean>> getChatInputListener(UUID playerId) {
+        return Optional.ofNullable(chatInputListeners.remove(playerId));
     }
 }

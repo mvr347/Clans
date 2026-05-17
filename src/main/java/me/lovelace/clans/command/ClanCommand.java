@@ -1,6 +1,7 @@
 package me.lovelace.clans.command;
 
 import me.lovelace.clans.ClansPlugin;
+import me.lovelace.clans.api.events.ClanDiplomacyChangeEvent;
 import me.lovelace.clans.model.Clan;
 import me.lovelace.clans.model.ClanRank;
 import me.lovelace.clans.model.DiplomacyRelation;
@@ -22,13 +23,21 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public final class ClanCommand implements CommandExecutor, TabCompleter {
-    private static final List<String> ROOT = List.of(
-            "help", "create", "disband", "invite", "accept", "leave", "kick", "promote", "demote",
-            "info", "claim", "unclaim", "menu", "members", "territories", "upgrades", "chest",
-            "war", "ally", "enemy", "neutral", "ritual", "vote", "artifact", "reload"
+    private static final List<String> ROOT_PLAYER_IN_CLAN = List.of(
+            "help", "disband", "invite", "accept", "leave", "kick", "promote", "demote",
+            "info", "claim", "unclaim", "menu", "members", "territories", "upgrades",
+            "war", "peace", "ally", "enemy", "neutral", "diplo", "ritual", "vote", "settings", "applications"
+    );
+    private static final List<String> ROOT_PLAYER_NOT_IN_CLAN = List.of(
+            "help", "create", "accept", "list", "info"
+    );
+    private static final List<String> ROOT_ADMIN = List.of(
+            "artifact", "reload", "admin"
     );
 
     private final ClansPlugin plugin;
@@ -43,25 +52,72 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             plugin.getMessages().send(sender, "general.no-permission");
             return true;
         }
+
+        String lbl = label.toLowerCase(Locale.ROOT);
+
+        // /clans or /clan list — open clan list
+        if (lbl.equals("clans") || (args.length > 0 && args[0].equalsIgnoreCase("list"))) {
+            if (sender instanceof Player player) {
+                if (plugin.getClanManager().getAllClans().isEmpty()) {
+                    plugin.getMessages().send(player, "clan.list.empty");
+                } else {
+                    plugin.getGuiManager().openClanList(player);
+                }
+            } else {
+                plugin.getMessages().send(sender, "general.players-only");
+            }
+            return true;
+        }
+
+        // /diplo or /cd — shorthand diplomacy command
+        if (lbl.equals("diplo") || lbl.equals("cd")) {
+            if (sender instanceof Player player) {
+                try { openDiplomacyFor(player, args.length > 0 ? args[0] : null); }
+                catch (IllegalStateException e) { plugin.sendOperationError(player, e); }
+            } else {
+                plugin.getMessages().send(sender, "general.players-only");
+            }
+            return true;
+        }
+
         if (args.length == 0) {
             if (sender instanceof Player player) {
-                openMenu(player);
+                Optional<Clan> playerClan = plugin.getClanManager().getPlayerClan(player.getUniqueId());
+                if (playerClan.isPresent()) {
+                    plugin.getGuiManager().openMain(player, playerClan.get());
+                } else {
+                    if (plugin.getClanManager().getAllClans().isEmpty()) {
+                        plugin.getMessages().send(player, "clan.list.empty");
+                    } else {
+                        plugin.getGuiManager().openClanList(player);
+                    }
+                }
             } else {
-                plugin.getMessages().send(sender, "clan.help");
+                plugin.getMessages().send(sender, "clan.help.console");
             }
             return true;
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
         try {
             switch (sub) {
-                case "help" -> plugin.getMessages().send(sender, "clan.help");
-                case "create" -> create(requirePlayer(sender), args);
+                case "help" -> {
+                    if (sender instanceof Player player) {
+                        if (plugin.getClanManager().getPlayerClan(player.getUniqueId()).isPresent()) {
+                            plugin.getMessages().send(player, "clan.help.in-clan");
+                        } else {
+                            plugin.getMessages().send(player, "clan.help.not-in-clan");
+                        }
+                    } else {
+                        plugin.getMessages().send(sender, "clan.help.console");
+                    }
+                }
+                case "create" -> openCreateGui(requirePlayer(sender));
                 case "disband" -> disband(requirePlayer(sender));
                 case "invite" -> invite(requirePlayer(sender), args);
                 case "accept" -> accept(requirePlayer(sender), args);
                 case "leave" -> leave(requirePlayer(sender));
                 case "kick" -> kick(requirePlayer(sender), args);
-                case "promote" -> rank(requirePlayer(sender), args, ClanRank.ASSISTANT);
+                case "promote" -> rank(requirePlayer(sender), args, ClanRank.GUARDIAN);
                 case "demote" -> rank(requirePlayer(sender), args, ClanRank.MEMBER);
                 case "info" -> info(sender, args);
                 case "claim" -> claim(requirePlayer(sender));
@@ -70,15 +126,37 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 case "members" -> openMembers(requirePlayer(sender));
                 case "territories" -> openTerritories(requirePlayer(sender));
                 case "upgrades" -> openUpgrades(requirePlayer(sender));
-                case "chest" -> openChest(requirePlayer(sender));
+                case "list" -> openClanList(requirePlayer(sender));
                 case "war" -> war(requirePlayer(sender), args);
-                case "ally" -> diplomacy(requirePlayer(sender), args, DiplomacyRelation.ALLY);
+                case "peace" -> peace(requirePlayer(sender), args);
+                case "ally" -> {
+                    if (args.length >= 3 && args[1].equalsIgnoreCase("accept")) {
+                        allianceAccept(requirePlayer(sender), args[2]);
+                    } else if (args.length >= 3 && args[1].equalsIgnoreCase("decline")) {
+                        allianceDecline(requirePlayer(sender), args[2]);
+                    } else {
+                        diplomacy(requirePlayer(sender), args, DiplomacyRelation.ALLY);
+                    }
+                }
                 case "enemy" -> diplomacy(requirePlayer(sender), args, DiplomacyRelation.ENEMY);
                 case "neutral" -> diplomacy(requirePlayer(sender), args, DiplomacyRelation.NEUTRAL);
+                case "diplo" -> openDiplomacyFor(requirePlayer(sender), args.length > 1 ? args[1] : null);
+                case "decline" -> declineInvite(requirePlayer(sender), args);
                 case "ritual" -> ritual(requirePlayer(sender), args);
                 case "vote" -> vote(requirePlayer(sender), args);
                 case "artifact" -> artifact(sender, args);
                 case "reload" -> reload(sender);
+                case "admin" -> admin(sender, args);
+                case "settings" -> openSettings(requirePlayer(sender));
+                case "applications" -> {
+                    if (args.length >= 3 && args[1].equalsIgnoreCase("accept")) {
+                        applicationAccept(requirePlayer(sender), args[2]);
+                    } else if (args.length >= 3 && args[1].equalsIgnoreCase("reject")) {
+                        applicationReject(requirePlayer(sender), args[2]);
+                    } else {
+                        openApplications(requirePlayer(sender));
+                    }
+                }
                 default -> plugin.getMessages().send(sender, "general.unknown-command");
             }
         } catch (IllegalStateException exception) {
@@ -89,34 +167,209 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) {
-            return filter(ROOT, args[0]);
-        }
-        if (args.length == 2) {
-            return switch (args[0].toLowerCase(Locale.ROOT)) {
-                case "accept", "war", "ally", "enemy", "neutral", "info" -> filter(plugin.getClanManager().getAllClans().stream().map(Clan::tag).toList(), args[1]);
-                case "ritual" -> filter(Arrays.stream(RitualType.values()).map(type -> type.name().toLowerCase(Locale.ROOT)).toList(), args[1]);
-                case "artifact" -> filter(Arrays.stream(ArtifactType.values()).map(type -> type.name().toLowerCase(Locale.ROOT)).toList(), args[1]);
-                default -> null;
-            };
+        List<String> completions = new ArrayList<>();
+        if (sender instanceof Player player) {
+            Optional<Clan> playerClan = plugin.getClanManager().getPlayerClan(player.getUniqueId());
+            if (args.length == 1) {
+                if (playerClan.isPresent()) {
+                    completions.addAll(ROOT_PLAYER_IN_CLAN);
+                } else {
+                    completions.addAll(ROOT_PLAYER_NOT_IN_CLAN);
+                }
+                if (sender.hasPermission(Permissions.ADMIN)) {
+                    completions.addAll(ROOT_ADMIN);
+                }
+                return filter(completions, args[0]);
+            }
+            if (args.length == 2) {
+                switch (args[0].toLowerCase(Locale.ROOT)) {
+                    case "accept", "war", "peace", "ally", "enemy", "neutral", "info" ->
+                            completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                    case "ritual" ->
+                            completions.addAll(Arrays.stream(RitualType.values()).map(type -> type.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList()));
+                    case "artifact" ->
+                            completions.addAll(Arrays.stream(ArtifactType.values()).map(type -> type.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList()));
+                    case "invite", "kick", "promote", "demote", "vote" ->
+                            Bukkit.getOnlinePlayers().stream().map(OfflinePlayer::getName).filter(Objects::nonNull).forEach(completions::add);
+                    case "admin" -> {
+                        if (sender.hasPermission(Permissions.ADMIN)) {
+                            completions.addAll(List.of("exp", "points", "diplo", "war"));
+                        }
+                    }
+                }
+                return filter(completions, args[1]);
+            }
+            if (args.length == 3 && args[0].equalsIgnoreCase("admin") && sender.hasPermission(Permissions.ADMIN)) {
+                 if (args[1].equalsIgnoreCase("exp") || args[1].equalsIgnoreCase("points")) {
+                     completions.addAll(List.of("add", "remove", "set"));
+                 } else if (args[1].equalsIgnoreCase("war")) {
+                     completions.addAll(List.of("start", "end"));
+                 } else if (args[1].equalsIgnoreCase("diplo")) {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 }
+                 return filter(completions, args[2]);
+            }
+            if (args.length == 4 && args[0].equalsIgnoreCase("admin") && sender.hasPermission(Permissions.ADMIN)) {
+                 if (args[1].equalsIgnoreCase("diplo") || args[1].equalsIgnoreCase("war")) {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 } else {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 }
+                 return filter(completions, args[3]);
+            }
+            if (args.length == 5 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("diplo") && sender.hasPermission(Permissions.ADMIN)) {
+                completions.addAll(List.of("ally", "enemy", "neutral"));
+                return filter(completions, args[4]);
+            }
+        } else { // Console sender
+            if (args.length == 1) {
+                completions.addAll(ROOT_ADMIN); // Only admin commands for console
+                completions.add("info"); // Allow console to get clan info
+                return filter(completions, args[0]);
+            }
+            if (args.length == 2) {
+                if (args[0].equalsIgnoreCase("info")) {
+                    completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                }
+                if (args[0].equalsIgnoreCase("artifact")) {
+                    completions.addAll(Arrays.stream(ArtifactType.values()).map(type -> type.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList()));
+                }
+                if (args[0].equalsIgnoreCase("admin")) {
+                    completions.addAll(List.of("exp", "points", "diplo", "war"));
+                }
+                return filter(completions, args[1]);
+            }
+            if (args.length == 3 && args[0].equalsIgnoreCase("admin")) {
+                 if (args[1].equalsIgnoreCase("exp") || args[1].equalsIgnoreCase("points")) {
+                     completions.addAll(List.of("add", "remove", "set"));
+                 } else if (args[1].equalsIgnoreCase("war")) {
+                     completions.addAll(List.of("start", "end"));
+                 } else if (args[1].equalsIgnoreCase("diplo")) {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 }
+                 return filter(completions, args[2]);
+            }
+            if (args.length == 4 && args[0].equalsIgnoreCase("admin")) {
+                 if (args[1].equalsIgnoreCase("diplo") || args[1].equalsIgnoreCase("war")) {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 } else {
+                     completions.addAll(plugin.getClanManager().getAllClans().stream().map(Clan::tag).collect(Collectors.toList()));
+                 }
+                 return filter(completions, args[3]);
+            }
+            if (args.length == 5 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("diplo")) {
+                completions.addAll(List.of("ally", "enemy", "neutral"));
+                return filter(completions, args[4]);
+            }
         }
         return List.of();
     }
 
-    private void create(Player player, String[] args) {
+    private void openCreateGui(Player player) {
         requirePermission(player, Permissions.CREATE);
-        if (args.length < 3) {
-            plugin.getMessages().send(player, "clan.help");
+        if (plugin.getClanManager().getPlayerClan(player.getUniqueId()).isPresent()) {
+            plugin.getMessages().send(player, "clan.already-in-clan");
             return;
         }
+        plugin.getGuiManager().openCreateMenu(player);
+    }
+
+    private void openDiplomacyFor(Player player, String targetTag) {
+        requirePermission(player, Permissions.DIPLOMACY);
+        Optional<Clan> sourceClan = requireClan(player);
+        if (sourceClan.isEmpty()) {
+            plugin.getMessages().send(player, "clan.not-in-clan");
+            return;
+        }
+        if (targetTag == null || targetTag.isBlank()) {
+            plugin.getGuiManager().openDiplomacySelect(player, sourceClan.get());
+            return;
+        }
+        Clan target = plugin.getClanManager().getClanByTag(targetTag)
+                .orElseThrow(() -> new IllegalStateException("war.not-found"));
+        plugin.getGuiManager().openDiplomacy(player, sourceClan.get(), target);
+    }
+
+    private void allianceAccept(Player player, String sourceClanTag) {
+        requirePermission(player, Permissions.DIPLOMACY);
+        Optional<Clan> acceptorClanOpt = requireClan(player);
+        if (acceptorClanOpt.isEmpty()) { plugin.getMessages().send(player, "clan.not-in-clan"); return; }
+        Clan acceptorClan = acceptorClanOpt.get();
+        Clan sourceClan = plugin.getClanManager().getClanByTag(sourceClanTag)
+                .orElseThrow(() -> new IllegalStateException("war.not-found"));
+        if (!plugin.getClanManager().hasPendingAllianceFrom(sourceClan.id(), acceptorClan.id())) {
+            plugin.getMessages().send(player, "diplomacy.no-pending-request", Map.of("tag", sourceClanTag));
+            return;
+        }
+        plugin.getClanManager().acceptAllianceAsync(acceptorClan, sourceClan, player.getUniqueId())
+                .thenRun(() -> plugin.runSync(() -> {
+                    plugin.getMessages().send(player, "diplomacy.alliance-accepted", Map.of("tag", sourceClanTag));
+                    plugin.getClanManager().getOnlineLeader(sourceClan).ifPresent(leader ->
+                            plugin.getMessages().send(leader, "diplomacy.alliance-accepted-by",
+                                    Map.of("tag", acceptorClan.tag())));
+                }))
+                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
+    }
+
+    private void allianceDecline(Player player, String sourceClanTag) {
+        requirePermission(player, Permissions.DIPLOMACY);
+        Optional<Clan> declinerClanOpt = requireClan(player);
+        if (declinerClanOpt.isEmpty()) { plugin.getMessages().send(player, "clan.not-in-clan"); return; }
+        Clan declinerClan = declinerClanOpt.get();
+        Clan sourceClan = plugin.getClanManager().getClanByTag(sourceClanTag)
+                .orElseThrow(() -> new IllegalStateException("war.not-found"));
+        plugin.getClanManager().declineAllianceAsync(declinerClan, sourceClan, player.getUniqueId())
+                .thenRun(() -> plugin.runSync(() -> {
+                    plugin.getMessages().send(player, "diplomacy.alliance-declined", Map.of("tag", sourceClanTag));
+                    plugin.getClanManager().getOnlineLeader(sourceClan).ifPresent(leader ->
+                            plugin.getMessages().send(leader, "diplomacy.alliance-declined-by",
+                                    Map.of("tag", declinerClan.tag())));
+                }))
+                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
+    }
+
+    private void declineInvite(Player player, String[] args) {
+        if (args.length < 2) { plugin.getMessages().send(player, "clan.help.accept"); return; }
         String tag = args[1];
-        String name = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
-        plugin.getClanManager().createClanAsync(name, tag, player.getUniqueId())
-                .thenAccept(clan -> plugin.runSync(() -> plugin.getMessages().send(player, "clan.created", Map.of("tag", clan.tag()))))
-                .exceptionally(throwable -> {
-                    plugin.runSync(() -> plugin.sendOperationError(player, throwable));
-                    return null;
-                });
+        plugin.getClanManager().getClanByTag(tag).ifPresentOrElse(clan -> {
+            // Remove invite from memory
+            plugin.getClanManager().getPlayerInvites(player.getUniqueId()).stream()
+                    .filter(inv -> inv.clanId().equals(clan.id()))
+                    .findFirst()
+                    .ifPresent(inv -> plugin.getClanManager().removeInvite(player.getUniqueId(), clan.id()));
+            plugin.getMessages().send(player, "clan.invite-declined", Map.of("tag", tag));
+        }, () -> plugin.getMessages().send(player, "clan.not-found"));
+    }
+
+    private void applicationAccept(Player player, String applicantName) {
+        requirePermission(player, Permissions.APPLICATIONS);
+        Optional<Clan> clanOpt = requireClan(player);
+        if (clanOpt.isEmpty()) { plugin.getMessages().send(player, "clan.not-in-clan"); return; }
+        Clan clan = clanOpt.get();
+        org.bukkit.OfflinePlayer applicant = Bukkit.getOfflinePlayer(applicantName);
+        plugin.getClanManager().acceptApplicationAsync(clan, player.getUniqueId(), applicant.getUniqueId())
+                .thenAccept(updatedClan -> plugin.runSync(() -> {
+                    plugin.getMessages().send(player, "gui.applications.accepted", Map.of("player", applicantName));
+                    Player online = Bukkit.getPlayer(applicant.getUniqueId());
+                    if (online != null) plugin.getMessages().send(online, "clan.joined", Map.of("tag", updatedClan.tag()));
+                }))
+                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
+    }
+
+    private void applicationReject(Player player, String applicantName) {
+        requirePermission(player, Permissions.APPLICATIONS);
+        Optional<Clan> clanOpt = requireClan(player);
+        if (clanOpt.isEmpty()) { plugin.getMessages().send(player, "clan.not-in-clan"); return; }
+        Clan clan = clanOpt.get();
+        org.bukkit.OfflinePlayer applicant = Bukkit.getOfflinePlayer(applicantName);
+        plugin.getClanManager().rejectApplicationAsync(clan, player.getUniqueId(), applicant.getUniqueId())
+                .thenRun(() -> plugin.runSync(() -> {
+                    plugin.getMessages().send(player, "gui.applications.rejected", Map.of("player", applicantName));
+                    Player online = Bukkit.getPlayer(applicant.getUniqueId());
+                    if (online != null) plugin.getMessages().send(online, "clan.application-rejected",
+                            Map.of("tag", clan.tag()));
+                }))
+                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
     }
 
     private void disband(Player player) {
@@ -138,7 +391,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     private void invite(Player player, String[] args) {
         requirePermission(player, Permissions.INVITE);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.invite");
             return;
         }
         Optional<Clan> optionalClan = requireClan(player);
@@ -155,7 +408,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         plugin.getClanManager().invitePlayerAsync(clan, player.getUniqueId(), target.getUniqueId())
                 .thenAccept(invite -> plugin.runSync(() -> {
                     plugin.getMessages().send(player, "clan.invited", Map.of("player", target.getName()));
-                    plugin.getMessages().send(target, "clan.invite-received", Map.of("tag", clan.tag()));
+                    plugin.getMessages().sendClickableInvite(target, clan.tag());
                 }))
                 .exceptionally(throwable -> {
                     plugin.runSync(() -> plugin.sendOperationError(player, throwable));
@@ -165,8 +418,12 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
     private void accept(Player player, String[] args) {
         requirePermission(player, Permissions.ACCEPT);
+        if (plugin.getClanManager().getPlayerClan(player.getUniqueId()).isPresent()) {
+            plugin.getMessages().send(player, "clan.already-in-clan");
+            return;
+        }
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.accept");
             return;
         }
         plugin.getClanManager().acceptInviteAsync(player.getUniqueId(), args[1])
@@ -196,7 +453,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     private void kick(Player player, String[] args) {
         requirePermission(player, Permissions.KICK);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.kick");
             return;
         }
         Optional<Clan> optionalClan = requireClan(player);
@@ -217,7 +474,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     private void rank(Player player, String[] args, ClanRank rank) {
         requirePermission(player, Permissions.RANK);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.rank");
             return;
         }
         Optional<Clan> optionalClan = requireClan(player);
@@ -236,20 +493,31 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     }
 
     private void info(CommandSender sender, String[] args) {
-        Optional<Clan> clan = args.length >= 2 ? plugin.getClanManager().getClanByTag(args[1])
-                : sender instanceof Player player ? plugin.getClanManager().getPlayerClan(player.getUniqueId()) : Optional.empty();
+        Optional<Clan> clan;
+        if (args.length >= 2) {
+            clan = plugin.getClanManager().getClanByTag(args[1]);
+        } else if (sender instanceof Player player) {
+            clan = plugin.getClanManager().getPlayerClan(player.getUniqueId());
+            if (clan.isEmpty()) {
+                plugin.getMessages().send(sender, "clan.info.no-name");
+                return;
+            }
+        } else {
+            plugin.getMessages().send(sender, "clan.info.no-name");
+            return;
+        }
+
         if (clan.isEmpty()) {
-            plugin.getMessages().send(sender, "clan.not-in-clan");
+            plugin.getMessages().send(sender, "clan.not-found");
             return;
         }
         Clan value = clan.get();
-        plugin.getMessages().send(sender, "clan.info", Map.of(
-                "tag", value.tag(),
-                "name", value.name(),
-                "level", String.valueOf(value.level()),
-                "members", String.valueOf(value.members().size()),
-                "max_members", String.valueOf(plugin.getClanManager().maxMembers(value))
-        ));
+        plugin.getMessages().send(sender, "clan.info.header", Map.of("tag", value.tag()));
+        plugin.getMessages().send(sender, "clan.info.line", Map.of("key", "Название", "value", value.name()));
+        plugin.getMessages().send(sender, "clan.info.line", Map.of("key", "Уровень", "value", String.valueOf(value.level())));
+        plugin.getMessages().send(sender, "clan.info.line", Map.of("key", "Очки улучшений", "value", String.valueOf(value.upgradePoints())));
+        plugin.getMessages().send(sender, "clan.info.line", Map.of("key", "Участники", "value", value.members().size() + "/" + plugin.getClanManager().maxMembers(value)));
+        plugin.getMessages().send(sender, "clan.info.line", Map.of("key", "Тип", "value", value.isOpen() ? "Открытый" : "Закрытый"));
     }
 
     private void claim(Player player) {
@@ -260,6 +528,13 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             return;
         }
         Clan clan = optionalClan.get();
+        
+        // Prevent claiming if at war
+        if (plugin.getWarManager().activeWars().stream().anyMatch(war -> war.involves(clan.id()))) {
+            plugin.getMessages().send(player, "war.cannot-claim");
+            return;
+        }
+
         plugin.getClanManager().claimTerritoryAsync(clan, player.getChunk(), player)
                 .thenAccept(territory -> plugin.runSync(() -> plugin.getMessages().send(player, "territory.claimed")))
                 .exceptionally(throwable -> {
@@ -276,6 +551,13 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             return;
         }
         Clan clan = optionalClan.get();
+        
+        // Prevent unclaiming if at war
+        if (plugin.getWarManager().activeWars().stream().anyMatch(war -> war.involves(clan.id()))) {
+            plugin.getMessages().send(player, "war.cannot-unclaim");
+            return;
+        }
+
         plugin.getClanManager().unclaimTerritoryAsync(clan, TerritoryKey.fromLocation(player.getLocation()), player.getUniqueId())
                 .thenRun(() -> plugin.runSync(() -> plugin.getMessages().send(player, "territory.unclaimed")))
                 .exceptionally(throwable -> {
@@ -324,20 +606,43 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         plugin.getGuiManager().openUpgrades(player, optionalClan.get());
     }
 
-    private void openChest(Player player) {
-        requirePermission(player, Permissions.CHEST);
+    private void openClanList(Player player) {
+        // No specific permission for listing clans, as it's for players without a clan
+        if (plugin.getClanManager().getPlayerClan(player.getUniqueId()).isPresent()) {
+            plugin.getMessages().send(player, "clan.already-in-clan");
+            return;
+        }
+        if (plugin.getClanManager().getAllClans().isEmpty()) {
+            plugin.getMessages().send(player, "clan.list.empty");
+            return;
+        }
+        plugin.getGuiManager().openClanList(player);
+    }
+
+    private void openSettings(Player player) {
+        requirePermission(player, Permissions.SETTINGS);
         Optional<Clan> optionalClan = requireClan(player);
         if (optionalClan.isEmpty()) {
             plugin.getMessages().send(player, "clan.not-in-clan");
             return;
         }
-        plugin.getClanChestManager().openChest(player, optionalClan.get());
+        plugin.getGuiManager().openSettings(player, optionalClan.get());
+    }
+
+    private void openApplications(Player player) {
+        requirePermission(player, Permissions.APPLICATIONS);
+        Optional<Clan> optionalClan = requireClan(player);
+        if (optionalClan.isEmpty()) {
+            plugin.getMessages().send(player, "clan.not-in-clan");
+            return;
+        }
+        plugin.getGuiManager().openApplications(player, optionalClan.get());
     }
 
     private void war(Player player, String[] args) {
         requirePermission(player, Permissions.WAR);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.war");
             return;
         }
         Optional<Clan> optionalAttacker = requireClan(player);
@@ -354,11 +659,31 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     return null;
                 });
     }
+    
+    private void peace(Player player, String[] args) {
+        requirePermission(player, Permissions.WAR);
+        if (args.length < 2) {
+            plugin.getMessages().send(player, "clan.help.war"); // Reusing for now
+            return;
+        }
+        Optional<Clan> optionalSource = requireClan(player);
+        if (optionalSource.isEmpty()) {
+            plugin.getMessages().send(player, "clan.not-in-clan");
+            return;
+        }
+        Clan source = optionalSource.get();
+        Clan target = plugin.getClanManager().getClanByTag(args[1]).orElseThrow(() -> new IllegalStateException("war.not-found"));
+        plugin.getWarManager().peaceAsync(source, target)
+                .exceptionally(throwable -> {
+                    plugin.runSync(() -> plugin.sendOperationError(player, throwable));
+                    return null;
+                });
+    }
 
     private void diplomacy(Player player, String[] args, DiplomacyRelation relation) {
         requirePermission(player, Permissions.DIPLOMACY);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.diplomacy");
             return;
         }
         Optional<Clan> optionalSource = requireClan(player);
@@ -379,7 +704,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     private void ritual(Player player, String[] args) {
         requirePermission(player, Permissions.RITUAL);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.ritual");
             return;
         }
         Optional<Clan> optionalClan = requireClan(player);
@@ -410,8 +735,9 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     }
 
     private void vote(Player player, String[] args) {
+        requirePermission(player, Permissions.VOTE);
         if (args.length < 2) {
-            plugin.getMessages().send(player, "clan.help");
+            plugin.getMessages().send(player, "clan.help.vote");
             return;
         }
         Optional<Clan> optionalClan = requireClan(player);
@@ -432,7 +758,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            plugin.getMessages().send(sender, "clan.help");
+            plugin.getMessages().send(sender, "clan.help.artifact");
             return;
         }
         ArtifactType type;
@@ -442,6 +768,150 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             throw new IllegalStateException("general.error", exception);
         }
         player.getInventory().addItem(plugin.getArtifactManager().createArtifact(type));
+    }
+    
+    private void admin(CommandSender sender, String[] args) {
+        requirePermission(sender, Permissions.ADMIN);
+        
+        if (args.length < 4) {
+             plugin.getMessages().send(sender, "clan.help.admin");
+             return;
+        }
+        
+        String action = args[1].toLowerCase(Locale.ROOT);
+        
+        if (action.equals("war")) {
+            if (args.length < 5) {
+                plugin.getMessages().send(sender, "clan.help.admin-war");
+                return;
+            }
+            String subAction = args[2].toLowerCase(Locale.ROOT);
+            String clan1Tag = args[3];
+            String clan2Tag = args[4];
+            
+            Optional<Clan> clan1Opt = plugin.getClanManager().getClanByTag(clan1Tag);
+            Optional<Clan> clan2Opt = plugin.getClanManager().getClanByTag(clan2Tag);
+            
+            if (clan1Opt.isEmpty() || clan2Opt.isEmpty()) {
+                plugin.getMessages().send(sender, "clan.not-found");
+                return;
+            }
+            
+            Clan clan1 = clan1Opt.get();
+            Clan clan2 = clan2Opt.get();
+            
+            if (subAction.equals("start")) {
+                plugin.getWarManager().startWarAsync(clan1, clan2, null)
+                    .thenRun(() -> plugin.runSync(() -> plugin.getMessages().send(sender, "admin.war-started", Map.of("clan1", clan1.tag(), "clan2", clan2.tag()))))
+                    .exceptionally(ex -> {
+                        plugin.runSync(() -> plugin.sendOperationError(sender, ex));
+                        return null;
+                    });
+            } else if (subAction.equals("end")) {
+                plugin.getWarManager().peaceAsync(clan1, clan2)
+                    .thenRun(() -> plugin.runSync(() -> plugin.getMessages().send(sender, "admin.war-ended", Map.of("clan1", clan1.tag(), "clan2", clan2.tag()))))
+                    .exceptionally(ex -> {
+                        plugin.runSync(() -> plugin.sendOperationError(sender, ex));
+                        return null;
+                    });
+            } else {
+                plugin.getMessages().send(sender, "clan.help.admin-war");
+            }
+            return;
+        }
+        
+        if (action.equals("diplo")) {
+            if (args.length < 5) {
+                plugin.getMessages().send(sender, "clan.help.admin-diplo");
+                return;
+            }
+            String clan1Tag = args[2];
+            String clan2Tag = args[3];
+            String relationStr = args[4].toUpperCase(Locale.ROOT);
+            
+            Optional<Clan> clan1Opt = plugin.getClanManager().getClanByTag(clan1Tag);
+            Optional<Clan> clan2Opt = plugin.getClanManager().getClanByTag(clan2Tag);
+            
+            if (clan1Opt.isEmpty() || clan2Opt.isEmpty()) {
+                plugin.getMessages().send(sender, "clan.not-found");
+                return;
+            }
+            
+            Clan clan1 = clan1Opt.get();
+            Clan clan2 = clan2Opt.get();
+            
+            DiplomacyRelation relation;
+            try {
+                relation = DiplomacyRelation.valueOf(relationStr);
+            } catch (IllegalArgumentException e) {
+                plugin.getMessages().send(sender, "general.invalid-relation");
+                return;
+            }
+            
+            clan1.setDiplomacy(clan2.id(), relation);
+            clan2.setDiplomacy(clan1.id(), relation);
+            
+            plugin.getStorage().saveDiplomacyAsync(clan1.id(), clan2.id(), relation)
+                .thenCompose(v -> plugin.getStorage().saveDiplomacyAsync(clan2.id(), clan1.id(), relation))
+                .thenRun(() -> plugin.runSync(() -> {
+                    plugin.getMessages().send(sender, "admin.diplo-updated", Map.of("clan1", clan1.tag(), "clan2", clan2.tag(), "relation", relation.name()));
+                    Bukkit.getPluginManager().callEvent(new ClanDiplomacyChangeEvent(clan1.id(), clan2.id(), relation));
+                }))
+                .exceptionally(ex -> {
+                    plugin.runSync(() -> plugin.sendOperationError(sender, ex));
+                    return null;
+                });
+            return;
+        }
+        
+        if (args.length < 5) {
+             plugin.getMessages().send(sender, "clan.help.admin");
+             return;
+        }
+        
+        String subAction = args[2].toLowerCase(Locale.ROOT); // add, remove, set
+        String tag = args[3];
+        long amount;
+        
+        try {
+            amount = Long.parseLong(args[4]);
+        } catch (NumberFormatException e) {
+            plugin.getMessages().send(sender, "general.invalid-number");
+            return;
+        }
+        
+        Optional<Clan> clanOpt = plugin.getClanManager().getClanByTag(tag);
+        if (clanOpt.isEmpty()) {
+            plugin.getMessages().send(sender, "clan.not-found");
+            return;
+        }
+        
+        Clan clan = clanOpt.get();
+        
+        if (action.equals("exp")) {
+            switch (subAction) {
+                case "add" -> plugin.getClanManager().addExperienceAsync(clan, amount);
+                case "remove" -> {
+                     clan.removeExperience(amount);
+                     plugin.getClanManager().updateClanAsync(clan);
+                }
+                case "set" -> {
+                     clan.setExperience(amount);
+                     plugin.getClanManager().updateClanAsync(clan);
+                }
+            }
+            plugin.getMessages().send(sender, "admin.exp-updated", Map.of("tag", clan.tag()));
+        } else if (action.equals("points")) {
+            switch (subAction) {
+                case "add" -> clan.addUpgradePoints((int) amount);
+                case "remove" -> clan.removeUpgradePoints((int) amount);
+                case "set" -> clan.setUpgradePoints((int) amount);
+            }
+            plugin.getClanManager().updateClanAsync(clan);
+            plugin.getMessages().send(sender, "admin.points-updated", Map.of("tag", clan.tag()));
+        } else {
+             plugin.getMessages().send(sender, "clan.help.admin");
+        }
     }
 
     private void reload(CommandSender sender) {

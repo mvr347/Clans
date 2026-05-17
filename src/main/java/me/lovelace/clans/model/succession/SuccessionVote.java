@@ -8,14 +8,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class SuccessionVote {
     private final UUID clanId;
-    private final UUID oldGuildmasterId;
+    private final UUID oldLeaderId;
     private final long startedAt;
     private final long endsAt;
     private final Map<UUID, UUID> votes = new ConcurrentHashMap<>();
 
-    public SuccessionVote(UUID clanId, UUID oldGuildmasterId, long startedAt, long endsAt) {
+    public SuccessionVote(UUID clanId, UUID oldLeaderId, long startedAt, long endsAt) {
         this.clanId = clanId;
-        this.oldGuildmasterId = oldGuildmasterId;
+        this.oldLeaderId = oldLeaderId;
         this.startedAt = startedAt;
         this.endsAt = endsAt;
     }
@@ -24,8 +24,8 @@ public final class SuccessionVote {
         return clanId;
     }
 
-    public UUID oldGuildmasterId() {
-        return oldGuildmasterId;
+    public UUID oldLeaderId() {
+        return oldLeaderId;
     }
 
     public long startedAt() {

@@ -5,7 +5,7 @@ import org.bukkit.inventory.InventoryHolder;
 
 import java.util.UUID;
 
-public final class ClanMenuHolder implements InventoryHolder {
+public class ClanMenuHolder implements InventoryHolder {
     private final ClanMenuType type;
     private final UUID clanId;
 

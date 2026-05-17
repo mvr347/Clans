@@ -88,11 +88,15 @@ public final class ClansAPI {
     }
 
     public CompletableFuture<Clan> createClanAsync(String name, String tag, Player founder) {
-        return createClanAsync(name, tag, founder.getUniqueId());
+        return createClanAsync(name, tag, founder.getUniqueId(), true);
     }
 
     public CompletableFuture<Clan> createClanAsync(String name, String tag, UUID founderId) {
-        return plugin.getClanManager().createClanAsync(name, tag, founderId);
+        return createClanAsync(name, tag, founderId, true);
+    }
+
+    public CompletableFuture<Clan> createClanAsync(String name, String tag, UUID founderId, boolean open) {
+        return plugin.getClanManager().createClanAsync(name, tag, founderId, open);
     }
 
     public CompletableFuture<Void> disbandClanAsync(Clan clan, UUID actorId) {

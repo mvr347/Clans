@@ -13,8 +13,13 @@ public record ClanWar(
         long endsAt,
         WarState state,
         int attackerScore,
-        int defenderScore
+        int defenderScore,
+        UUID capturedBannerBy,
+        long bannerCapturedAt
 ) {
+    public ClanWar(UUID id, UUID attackerClanId, UUID defenderClanId, TerritoryKey contestedTerritory, long startedAt, long endsAt, WarState state, int attackerScore, int defenderScore) {
+        this(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore, null, 0);
+    }
 
     public boolean involves(UUID clanId) {
         return attackerClanId.equals(clanId) || defenderClanId.equals(clanId);
@@ -26,14 +31,18 @@ public record ClanWar(
     }
 
     public ClanWar withState(WarState state) {
-        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore);
+        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore, capturedBannerBy, bannerCapturedAt);
     }
 
     public ClanWar addAttackerScore(int amount) {
-        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore + amount, defenderScore);
+        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore + amount, defenderScore, capturedBannerBy, bannerCapturedAt);
     }
 
     public ClanWar addDefenderScore(int amount) {
-        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore + amount);
+        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore + amount, capturedBannerBy, bannerCapturedAt);
+    }
+    
+    public ClanWar withBannerCapture(UUID playerId, long capturedAt) {
+        return new ClanWar(id, attackerClanId, defenderClanId, contestedTerritory, startedAt, endsAt, state, attackerScore, defenderScore, playerId, capturedAt);
     }
 }

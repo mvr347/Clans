@@ -5,8 +5,10 @@ import org.bukkit.Material;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,13 +22,16 @@ public final class Clan {
     private Material emblem;
     private int level;
     private long experience;
+    private int upgradePoints;
     private int chestRows;
     private ClanSpirit spirit;
+    private boolean open;
 
     private final Map<UUID, ClanMember> members = new ConcurrentHashMap<>();
     private final Map<TerritoryKey, ClanTerritory> territories = new ConcurrentHashMap<>();
     private final Map<UUID, DiplomacyRelation> diplomacy = new ConcurrentHashMap<>();
     private final Map<ClanUpgrade, Integer> upgrades = new ConcurrentHashMap<>();
+    private final Map<ClanRank, Set<ClanPermission>> permissions = new ConcurrentHashMap<>();
 
     public Clan(UUID id,
                 String name,
@@ -36,9 +41,11 @@ public final class Clan {
                 Material emblem,
                 int level,
                 long experience,
+                int upgradePoints,
                 int chestRows,
                 ClanSpirit spirit,
-                long createdAt) {
+                long createdAt,
+                boolean open) {
         this.id = id;
         this.name = name;
         this.tag = tag;
@@ -47,17 +54,26 @@ public final class Clan {
         this.emblem = emblem;
         this.level = level;
         this.experience = experience;
+        this.upgradePoints = upgradePoints;
         this.chestRows = chestRows;
         this.spirit = spirit;
         this.createdAt = createdAt;
+        this.open = open;
         for (ClanUpgrade upgrade : ClanUpgrade.values()) {
             upgrades.put(upgrade, 0);
         }
+        // Default permissions
+        for (ClanRank rank : ClanRank.values()) {
+            permissions.put(rank, EnumSet.noneOf(ClanPermission.class));
+        }
+        // Guildmaster has all permissions implicitly, but let's set defaults for Guardian
+        permissions.get(ClanRank.GUARDIAN).addAll(EnumSet.allOf(ClanPermission.class));
+        permissions.get(ClanRank.MEMBER).add(ClanPermission.BUILD);
     }
 
-    public static Clan create(UUID id, String name, String tag, String tagColor, Material emblem, UUID founderId, int chestRows) {
-        Clan clan = new Clan(id, name, tag, tagColor, "", emblem, 1, 0L, chestRows, ClanSpirit.fresh(), System.currentTimeMillis());
-        clan.addMember(founderId, ClanRank.GUILDMASTER);
+    public static Clan create(UUID id, String name, String tag, String tagColor, Material emblem, UUID founderId, int chestRows, boolean open) {
+        Clan clan = new Clan(id, name, tag, tagColor, "", emblem, 1, 0L, 0, chestRows, ClanSpirit.fresh(), System.currentTimeMillis(), open);
+        clan.addMember(founderId, ClanRank.LEADER);
         return clan;
     }
 
@@ -96,6 +112,10 @@ public final class Clan {
     public long experience() {
         return experience;
     }
+    
+    public int upgradePoints() {
+        return upgradePoints;
+    }
 
     public int chestRows() {
         return chestRows;
@@ -107,6 +127,14 @@ public final class Clan {
 
     public long createdAt() {
         return createdAt;
+    }
+
+    public boolean isOpen() {
+        return open;
+    }
+
+    public void setOpen(boolean open) {
+        this.open = open;
     }
 
     public Map<UUID, ClanMember> members() {
@@ -132,10 +160,30 @@ public final class Clan {
     public boolean hasMember(UUID playerId) {
         return members.containsKey(playerId);
     }
+    
+    public boolean hasPermission(UUID playerId, ClanPermission permission) {
+        Optional<ClanMember> member = member(playerId);
+        if (member.isEmpty()) return false;
+        if (member.get().rank() == ClanRank.LEADER) return true;
+        return permissions.getOrDefault(member.get().rank(), EnumSet.noneOf(ClanPermission.class)).contains(permission);
+    }
+    
+    public void setPermission(ClanRank rank, ClanPermission permission, boolean value) {
+        Set<ClanPermission> perms = permissions.computeIfAbsent(rank, k -> EnumSet.noneOf(ClanPermission.class));
+        if (value) {
+            perms.add(permission);
+        } else {
+            perms.remove(permission);
+        }
+    }
+    
+    public boolean getPermission(ClanRank rank, ClanPermission permission) {
+        return permissions.getOrDefault(rank, EnumSet.noneOf(ClanPermission.class)).contains(permission);
+    }
 
-    public Optional<UUID> guildmasterId() {
+    public Optional<UUID> leaderId() {
         return members.values().stream()
-                .filter(member -> member.rank() == ClanRank.GUILDMASTER)
+                .filter(member -> member.rank() == ClanRank.LEADER)
                 .map(ClanMember::playerId)
                 .findFirst();
     }
@@ -204,14 +252,35 @@ public final class Clan {
         spirit = spirit.addEnergy(Math.max(0L, amount / 4));
         return experience;
     }
+    
+    public void removeExperience(long amount) {
+        experience = Math.max(0L, experience - amount);
+    }
 
     public void levelUp() {
         level++;
+        upgradePoints++; // Give one upgrade point per level
         spirit = spirit.withLevel(Math.max(spirit.level(), level));
     }
 
     public void setExperience(long experience) {
         this.experience = Math.max(0L, experience);
+    }
+    
+    public void setLevel(int level) {
+        this.level = Math.max(1, level);
+    }
+    
+    public void setUpgradePoints(int points) {
+        this.upgradePoints = Math.max(0, points);
+    }
+    
+    public void addUpgradePoints(int points) {
+        this.upgradePoints = Math.max(0, this.upgradePoints + points);
+    }
+    
+    public void removeUpgradePoints(int points) {
+        this.upgradePoints = Math.max(0, this.upgradePoints - points);
     }
 
     public void setSpirit(ClanSpirit spirit) {
@@ -228,6 +297,14 @@ public final class Clan {
 
     public void setTagColor(String tagColor) {
         this.tagColor = tagColor;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setTag(String tag) {
+        this.tag = tag;
     }
 
     public void setEmblem(Material emblem) {

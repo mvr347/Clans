@@ -7,8 +7,10 @@ import me.lovelace.clans.model.ClanRank;
 import me.lovelace.clans.model.ClanTerritory;
 import me.lovelace.clans.model.TerritoryKey;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
+import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 
 import java.lang.reflect.InvocationTargetException;
@@ -16,12 +18,15 @@ import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.Level;
 
 public final class AdvancedClaimsHook {
     private final ClansPlugin plugin;
     private Object api;
     private Class<?> trustLevelClass;
     private boolean enabled;
+    private Method showBorderMethod;
+    private Method hideBorderMethod;
 
     public AdvancedClaimsHook(ClansPlugin plugin) {
         this.plugin = plugin;
@@ -42,10 +47,15 @@ public final class AdvancedClaimsHook {
             Method getInstance = apiClass.getMethod(plugin.getConfig().getString("integration.advanced-claims.methods.get-instance", "getInstance"));
             api = getInstance.invoke(null);
             trustLevelClass = Class.forName(trustLevelClassName);
+            
+            // Get showBorder and hideBorder methods
+            showBorderMethod = apiClass.getMethod("showBorder", Player.class, BoundingBox.class, long.class);
+            hideBorderMethod = apiClass.getMethod("hideBorder", Player.class);
+
             plugin.getLogger().info("AdvancedClaimsAPI integration enabled.");
         } catch (ReflectiveOperationException exception) {
             enabled = false;
-            plugin.getLogger().warning("AdvancedClaims found, but API reflection failed: " + exception.getMessage());
+            plugin.getLogger().log(Level.WARNING, "AdvancedClaims found, but API reflection failed.", exception);
         }
     }
 
@@ -67,9 +77,9 @@ public final class AdvancedClaimsHook {
         BoundingBox box = new BoundingBox(minX, world.getMinHeight(), minZ, minX + 15, world.getMaxHeight(), minZ + 15);
         Object claim = invokeBest(
                 methodName("create-claim", "createClaim"),
-                new Object[]{world, box, clan.guildmasterId().orElse(territory.claimedBy()), world.getHighestBlockAt(minX + 8, minZ + 8).getLocation()},
-                new Object[]{world, box, clan.guildmasterId().orElse(territory.claimedBy())},
-                new Object[]{clan.guildmasterId().orElse(territory.claimedBy()), world.getChunkAt(key.chunkX(), key.chunkZ())}
+                new Object[]{world, box, clan.leaderId().orElse(territory.claimedBy()), world.getHighestBlockAt(minX + 8, minZ + 8).getLocation()},
+                new Object[]{world, box, clan.leaderId().orElse(territory.claimedBy())},
+                new Object[]{clan.leaderId().orElse(territory.claimedBy()), world.getChunkAt(key.chunkX(), key.chunkZ())}
         ).orElse(null);
 
         Optional<UUID> claimId = extractClaimId(claim);
@@ -82,6 +92,43 @@ public final class AdvancedClaimsHook {
             return;
         }
         invokeBest(methodName("delete-claim", "deleteClaim"), new Object[]{claimId}, new Object[]{claimId.toString()});
+    }
+
+    public boolean isClaimed(Chunk chunk) {
+        if (!enabled()) {
+            return false;
+        }
+        return (boolean) invokeBest(methodName("is-claimed", "isClaimed"),
+                new Object[]{chunk},
+                new Object[]{chunk.getWorld(), chunk.getX(), chunk.getZ()}
+        ).orElse(false);
+    }
+
+    public Optional<UUID> getClaimOwner(Chunk chunk) {
+        if (!enabled()) {
+            return Optional.empty();
+        }
+        Object owner = invokeBest(methodName("get-claim-owner", "getClaimOwner"),
+                new Object[]{chunk},
+                new Object[]{chunk.getWorld(), chunk.getX(), chunk.getZ()}
+        ).orElse(null);
+        
+        if (owner instanceof UUID uuid) {
+            return Optional.of(uuid);
+        }
+        // If the API returns a Claim object, try to extract the owner UUID from it
+        if (owner != null) {
+            for (String method : new String[]{"getOwnerId", "ownerId", "getOwner", "owner"}) {
+                try {
+                    Object value = owner.getClass().getMethod(method).invoke(owner);
+                    if (value instanceof UUID uuid) {
+                        return Optional.of(uuid);
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     public void syncClanTrust(Clan clan, ClanTerritory territory) {
@@ -252,5 +299,23 @@ public final class AdvancedClaimsHook {
 
     private String methodName(String pathName, String fallback) {
         return plugin.getConfig().getString("integration.advanced-claims.methods." + pathName, fallback);
+    }
+    
+    public void showClaimBorder(Player player, BoundingBox box, long durationTicks) {
+        if (!enabled() || showBorderMethod == null) return;
+        try {
+            showBorderMethod.invoke(api, player, box, durationTicks);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to invoke showBorder method from AdvancedClaimsAPI", e);
+        }
+    }
+
+    public void hideClaimBorder(Player player) {
+        if (!enabled() || hideBorderMethod == null) return;
+        try {
+            hideBorderMethod.invoke(api, player);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to invoke hideBorder method from AdvancedClaimsAPI", e);
+        }
     }
 }

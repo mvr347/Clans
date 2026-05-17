@@ -32,7 +32,7 @@ public final class RitualManager {
     public CompletableFuture<ClanRitual> startRitualAsync(Clan clan, UUID actorId, RitualType type) {
         return plugin.supplySync(() -> {
             clan.member(actorId)
-                    .filter(member -> member.rank().atLeast(ClanRank.ASSISTANT))
+                    .filter(member -> member.rank().atLeast(ClanRank.GUARDIAN))
                     .orElseThrow(() -> new IllegalStateException("clan.rank-too-low"));
             long now = System.currentTimeMillis();
             long availableAt = cooldowns.getOrDefault(clan.id(), 0L);

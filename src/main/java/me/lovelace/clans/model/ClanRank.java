@@ -1,9 +1,10 @@
 package me.lovelace.clans.model;
 
 public enum ClanRank {
-    MEMBER(0, "Member"),
-    ASSISTANT(1, "Assistant"),
-    GUILDMASTER(2, "Guildmaster");
+    RECRUIT(0, "Новичок"),
+    MEMBER(1, "Со-клановец"),
+    GUARDIAN(2, "Хранитель"),
+    LEADER(3, "Глава");
 
     private final int weight;
     private final String displayName;
@@ -26,6 +27,24 @@ public enum ClanRank {
     }
 
     public boolean canManage(ClanRank target) {
-        return this == GUILDMASTER || (this == ASSISTANT && target == MEMBER);
+        return this == LEADER || (this.weight > target.weight);
+    }
+
+    public ClanRank nextRank() {
+        ClanRank[] ranks = ClanRank.values();
+        int ordinal = this.ordinal();
+        if (ordinal < ranks.length - 1) {
+            return ranks[ordinal + 1];
+        }
+        return null; // Already the highest rank
+    }
+
+    public ClanRank previousRank() {
+        ClanRank[] ranks = ClanRank.values();
+        int ordinal = this.ordinal();
+        if (ordinal > 0) {
+            return ranks[ordinal - 1];
+        }
+        return null; // Already the lowest rank
     }
 }

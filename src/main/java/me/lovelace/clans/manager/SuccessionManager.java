@@ -56,7 +56,7 @@ public final class SuccessionManager {
                 }
                 continue;
             }
-            clan.guildmasterId().ifPresent(leader -> {
+            clan.leaderId().ifPresent(leader -> {
                 if (leaderAbsent(clan, leader, now)) {
                     startVote(clan, leader, now);
                 }
@@ -99,8 +99,8 @@ public final class SuccessionManager {
         if (winner.isEmpty() || !clan.hasMember(winner.get())) {
             return;
         }
-        clan.guildmasterId().ifPresent(old -> clan.setRank(old, ClanRank.ASSISTANT));
-        clan.setRank(winner.get(), ClanRank.GUILDMASTER);
+        clan.leaderId().ifPresent(old -> clan.setRank(old, ClanRank.GUARDIAN));
+        clan.setRank(winner.get(), ClanRank.LEADER);
         plugin.getStorage().saveClanAsync(clan);
         OfflinePlayer promoted = Bukkit.getOfflinePlayer(winner.get());
         clan.members().keySet().stream()

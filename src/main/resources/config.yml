@@ -15,13 +15,30 @@ database:
 
 clans:
   tag:
-    min-length: 2
+    min-length: 3
     max-length: 6
     pattern: "^[A-Za-z0-9_]+$"
   name:
-    min-length: 3
-    max-length: 32
+    min-length: 4
+    max-length: 10
   default-tag-color: "<gold>"
+  available-colors:
+    white: { tag: "<white>", material: WHITE_WOOL, name: "Белый" }
+    gray: { tag: "<gray>", material: GRAY_WOOL, name: "Серый" }
+    dark_gray: { tag: "<dark_gray>", material: GRAY_TERRACOTTA, name: "Тёмно-серый" }
+    black: { tag: "<black>", material: BLACK_WOOL, name: "Чёрный" }
+    red: { tag: "<red>", material: RED_WOOL, name: "Красный" }
+    dark_red: { tag: "<dark_red>", material: RED_TERRACOTTA, name: "Тёмно-красный" }
+    gold: { tag: "<gold>", material: ORANGE_WOOL, name: "Золотой" }
+    yellow: { tag: "<yellow>", material: YELLOW_WOOL, name: "Жёлтый" }
+    green: { tag: "<green>", material: LIME_WOOL, name: "Зелёный" }
+    dark_green: { tag: "<dark_green>", material: GREEN_WOOL, name: "Тёмно-зелёный" }
+    aqua: { tag: "<aqua>", material: LIGHT_BLUE_WOOL, name: "Голубой" }
+    dark_aqua: { tag: "<dark_aqua>", material: CYAN_WOOL, name: "Бирюзовый" }
+    blue: { tag: "<blue>", material: BLUE_WOOL, name: "Синий" }
+    dark_blue: { tag: "<dark_blue>", material: BLUE_TERRACOTTA, name: "Тёмно-синий" }
+    light_purple: { tag: "<light_purple>", material: MAGENTA_WOOL, name: "Розовый" }
+    dark_purple: { tag: "<dark_purple>", material: PURPLE_WOOL, name: "Фиолетовый" }
   default-emblem: WHITE_BANNER
   invite-expire-seconds: 120
   friendly-fire: false
@@ -36,8 +53,8 @@ limits:
   max-chest-rows: 6
 
 leveling:
-  base-exp: 1000
-  multiplier: 1.35
+  base-exp: 100
+  multiplier: 1.83
   territory-claim-exp: 150
   war-win-exp: 1200
   ritual-exp: 250

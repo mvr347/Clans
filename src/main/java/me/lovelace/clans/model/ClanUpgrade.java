@@ -4,7 +4,6 @@ public enum ClanUpgrade {
     MEMBERS("Больше участников"),
     TERRITORIES("Больше территорий"),
     LOOTING("Бонус добычи"),
-    CHEST("Клан-сундук"),
     SPIRIT("Дух клана"),
     WARFARE("Военные перки");
 
