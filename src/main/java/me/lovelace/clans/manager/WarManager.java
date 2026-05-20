@@ -264,8 +264,8 @@ public final class WarManager {
         ItemStack compass = new ItemStack(Material.COMPASS);
         ItemMeta meta = compass.getItemMeta();
         if (meta != null) {
-            meta.displayName(Component.text("War Compass - Tracking " + enemyClanTag + " Banner").color(NamedTextColor.GOLD));
-            meta.lore(List.of(Component.text("Points to the enemy clan's banner during war.").color(NamedTextColor.GRAY)));
+            meta.displayName(plugin.getMessages().component("item.war-compass.name", Map.of("tag", enemyClanTag)));
+            meta.lore(List.of(plugin.getMessages().component("item.war-compass.lore")));
             compass.setItemMeta(meta);
         }
 

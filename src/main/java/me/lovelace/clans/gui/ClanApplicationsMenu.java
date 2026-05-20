@@ -25,13 +25,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClanApplicationsMenu {
-    private static final int[] CONTENT_SLOTS = {
-            10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34,
-            37, 38, 39, 40, 41, 42, 43
-    };
-
     private static final String INVITE_TAG = "invite:";
 
     private final ClansPlugin plugin;
@@ -52,31 +45,36 @@ public final class ClanApplicationsMenu {
                 .toList();
         List<ClanInvite> invites = plugin.getClanManager().getClanInvites(clan.id());
 
-        // Total items = applications + invites
-        int totalItems = applications.size() + invites.size();
-        int maxPage = Math.max(0, (totalItems - 1) / CONTENT_SLOTS.length);
-        int page = Math.max(0, Math.min(requestedPage, maxPage));
-        pageByPlayer.put(player.getUniqueId(), page);
-
-        Inventory inventory = Bukkit.createInventory(new ClanMenuHolder(ClanMenuType.APPLICATIONS, clan.id()), 54,
-                plugin.getMessages().component("gui.applications.title", Map.of("clan", clan.name()), player));
-
-        fillGlass(inventory);
-
-        // Build combined list: applications first, then invites
         List<Object> combined = new ArrayList<>();
         combined.addAll(applications);
         combined.addAll(invites);
 
-        int start = page * CONTENT_SLOTS.length;
-        int end = Math.min(start + CONTENT_SLOTS.length, combined.size());
+        int totalItems = combined.size();
+        int invSize = computeSize(totalItems);
+        int[] contentSlots = computeContentSlots(invSize);
+        int perPage = contentSlots.length;
+        int maxPage = perPage == 0 ? 0 : Math.max(0, (totalItems - 1) / perPage);
+        int page = Math.max(0, Math.min(requestedPage, maxPage));
+        pageByPlayer.put(player.getUniqueId(), page);
+
+        Inventory inventory = Bukkit.createInventory(
+                new ClanMenuHolder(ClanMenuType.APPLICATIONS, clan.id()),
+                invSize,
+                plugin.getMessages().component("gui.applications.title",
+                        Map.of("clan", clan.name(), "color", clan.tagColor()), player));
+
+        fillGlass(inventory);
+
+        int start = page * perPage;
+        int end = Math.min(start + perPage, totalItems);
         for (int index = start; index < end; index++) {
             Object entry = combined.get(index);
+            int targetSlot = contentSlots[index - start];
             if (entry instanceof ClanApplication application) {
                 OfflinePlayer applicant = Bukkit.getOfflinePlayer(application.applicantId());
                 String applicantName = applicant.getName() == null ? applicant.getUniqueId().toString() : applicant.getName();
 
-                inventory.setItem(CONTENT_SLOTS[index - start], ItemBuilder.of(Material.PLAYER_HEAD)
+                inventory.setItem(targetSlot, ItemBuilder.of(Material.PLAYER_HEAD)
                         .name(plugin.getMessages().component("gui.applications.applicant-item.name",
                                 Map.of("player", applicantName), player))
                         .lore(plugin.getMessages().component("gui.applications.applicant-item.applied-at",
@@ -98,44 +96,39 @@ public final class ClanApplicationsMenu {
                 OfflinePlayer invited = Bukkit.getOfflinePlayer(invite.invitedPlayer());
                 String invitedName = invited.getName() == null ? invite.invitedPlayer().toString() : invited.getName();
 
-                inventory.setItem(CONTENT_SLOTS[index - start], ItemBuilder.of(Material.PAPER)
+                inventory.setItem(targetSlot, ItemBuilder.of(Material.PAPER)
                         .name(plugin.getMessages().component("gui.applications.invite-item.name",
                                 Map.of("player", invitedName), player))
                         .lore(plugin.getMessages().component("gui.applications.invite-item.status", player))
-                        .mutate(meta -> {
-                            if (meta instanceof SkullMeta skullMeta) {
-                                skullMeta.setOwningPlayer(invited);
-                            }
-                            // Mark as invite so click is ignored
-                            meta.getPersistentDataContainer().set(
-                                    plugin.getGuiManager().memberKey(),
-                                    PersistentDataType.STRING,
-                                    INVITE_TAG + invite.invitedPlayer()
-                            );
-                        })
+                        .mutate(meta -> meta.getPersistentDataContainer().set(
+                                plugin.getGuiManager().memberKey(),
+                                PersistentDataType.STRING,
+                                INVITE_TAG + invite.invitedPlayer()))
                         .build());
             }
         }
 
         if (combined.isEmpty()) {
-            inventory.setItem(22, ItemBuilder.of(Material.PAPER)
+            int emptySlot = invSize / 2 - (invSize >= 54 ? 4 : 4);
+            inventory.setItem(Math.max(0, emptySlot), ItemBuilder.of(Material.PAPER)
                     .name(plugin.getMessages().component("gui.applications.empty.name", player))
                     .lore(plugin.getMessages().component("gui.applications.empty.lore", player))
                     .build());
         }
 
+        int lastRowStart = invSize - 9;
         if (page > 0) {
-            inventory.setItem(45, ItemBuilder.head(ItemBuilder.HEAD_BACK)
+            inventory.setItem(lastRowStart, ItemBuilder.head(ItemBuilder.HEAD_PREVIOUS)
                     .name(plugin.getMessages().component("gui.previous-page", player))
                     .build());
         }
         if (page < maxPage) {
-            inventory.setItem(53, ItemBuilder.of(Material.ARROW)
+            inventory.setItem(lastRowStart + 8, ItemBuilder.head(ItemBuilder.HEAD_NEXT)
                     .name(plugin.getMessages().component("gui.next-page", player))
                     .build());
         }
 
-        inventory.setItem(49, ItemBuilder.head(ItemBuilder.HEAD_BACK)
+        inventory.setItem(lastRowStart + 4, ItemBuilder.head(ItemBuilder.HEAD_BACK)
                 .name(plugin.getMessages().component("gui.back", player))
                 .build());
 
@@ -144,29 +137,31 @@ public final class ClanApplicationsMenu {
 
     public void handleInventoryClick(InventoryClickEvent event, Player player, Clan clan) {
         int slot = event.getRawSlot();
-        if (slot == 49) {
+        int invSize = event.getView().getTopInventory().getSize();
+        int lastRowStart = invSize - 9;
+        int backSlot = lastRowStart + 4;
+        int prevSlot = lastRowStart;
+        int nextSlot = lastRowStart + 8;
+
+        if (slot == backSlot) {
             pageByPlayer.remove(player.getUniqueId());
             plugin.getGuiManager().openMain(player, clan);
             return;
         }
-        if (slot == 45) {
+        if (slot == prevSlot) {
             open(player, clan, pageByPlayer.getOrDefault(player.getUniqueId(), 0) - 1);
             return;
         }
-        if (slot == 53) {
+        if (slot == nextSlot) {
             open(player, clan, pageByPlayer.getOrDefault(player.getUniqueId(), 0) + 1);
             return;
         }
 
-        if (!isContentSlot(slot) || event.getCurrentItem() == null || !event.getCurrentItem().hasItemMeta()) {
-            return;
-        }
+        if (event.getCurrentItem() == null || !event.getCurrentItem().hasItemMeta()) return;
 
         String rawId = event.getCurrentItem().getItemMeta().getPersistentDataContainer().get(
                 plugin.getGuiManager().memberKey(), PersistentDataType.STRING);
-        if (rawId == null || rawId.startsWith(INVITE_TAG)) {
-            return; // invites are display-only
-        }
+        if (rawId == null || rawId.startsWith(INVITE_TAG)) return;
 
         UUID applicantId;
         try {
@@ -209,11 +204,27 @@ public final class ClanApplicationsMenu {
         }
     }
 
-    private boolean isContentSlot(int slot) {
-        for (int contentSlot : CONTENT_SLOTS) {
-            if (contentSlot == slot) return true;
+    public void clearPlayer(UUID playerId) {
+        pageByPlayer.remove(playerId);
+    }
+
+    private static int computeSize(int totalItems) {
+        if (totalItems <= 7) return 27;
+        if (totalItems <= 14) return 36;
+        if (totalItems <= 21) return 45;
+        return 54;
+    }
+
+    private static int[] computeContentSlots(int invSize) {
+        List<Integer> slots = new ArrayList<>();
+        int contentRowCount = (invSize / 9) - 2;
+        for (int row = 0; row < contentRowCount; row++) {
+            int rowStart = 9 + row * 9;
+            for (int col = 1; col <= 7; col++) {
+                slots.add(rowStart + col);
+            }
         }
-        return false;
+        return slots.stream().mapToInt(i -> i).toArray();
     }
 
     private void fillGlass(Inventory inventory) {

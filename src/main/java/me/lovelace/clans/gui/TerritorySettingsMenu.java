@@ -53,12 +53,6 @@ public class TerritorySettingsMenu implements InventoryHolder {
                 .name(plugin.getMessages().component("gui.territory-settings.disband-private.name", player))
                 .lore(plugin.getMessages().component("gui.territory-settings.disband-private.lore", player))
                 .build());
-                
-        // Move Clan Home button
-        inventory.setItem(16, ItemBuilder.head(ItemBuilder.HEAD_MAP)
-                .name(plugin.getMessages().component("gui.territory-settings.move.name", player))
-                .lore(plugin.getMessages().component("gui.territory-settings.move.lore", player))
-                .build());
 
         // Back button
         inventory.setItem(22, ItemBuilder.head(ItemBuilder.HEAD_BACK)
@@ -111,17 +105,6 @@ public class TerritorySettingsMenu implements InventoryHolder {
                         plugin.runSync(() -> plugin.sendOperationError(player, t));
                         return null;
                     });
-        } else if (slot == 16) { // Move Territory
-            player.closeInventory();
-            // Start move process
-            plugin.getMessages().send(player, "territory.move-prompt");
-            
-            // Give banner if they don't have it in inventory
-            if (!player.getInventory().contains(clan.emblem())) {
-                player.getInventory().addItem(plugin.getClanManager().getClanHomeBanner(clan));
-            }
-            
-            // Logic handled in ClanProtectionListener
         }
     }
 

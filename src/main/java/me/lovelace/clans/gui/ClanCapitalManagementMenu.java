@@ -11,7 +11,6 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemStack;
 
 import java.util.Map;
 import java.util.Optional;
@@ -85,31 +84,8 @@ public class ClanCapitalManagementMenu implements InventoryHolder {
         }
         inventory.setItem(14, disbandItem);
 
-        // Slot 16: Expand Territory
-        ItemStack expandItem;
-        if (!canManage) {
-            expandItem = ItemBuilder.of(Material.BARRIER)
-                    .name(plugin.getMessages().component("gui.capital.expand.name", player))
-                    .lore(plugin.getMessages().component("gui.capital.no-permission", player))
-                    .build();
-        } else {
-            // TODO: Add upgrade level check here for barrier
-            expandItem = ItemBuilder.of(Material.GOLDEN_SHOVEL)
-                    .name(plugin.getMessages().component("gui.capital.expand.name", player))
-                    .lore(plugin.getMessages().component("gui.capital.expand.lore", player))
-                    .build();
-        }
-        inventory.setItem(16, expandItem);
-
-        // Slot 22: Clan Hearth Settings (Toggle)
-        // TODO: Implement Clan Hearth logic and display state
-        inventory.setItem(22, ItemBuilder.of(Material.CAMPFIRE)
-                .name(plugin.getMessages().component("gui.capital.hearth.name", player))
-                .lore(plugin.getMessages().component("gui.capital.hearth.lore", player))
-                .build());
-
-        // Back button
-        inventory.setItem(18, ItemBuilder.head(ItemBuilder.HEAD_BACK)
+        // Back button (bottom center)
+        inventory.setItem(22, ItemBuilder.head(ItemBuilder.HEAD_BACK)
                 .name(plugin.getMessages().component("gui.back", player))
                 .build());
 
@@ -123,67 +99,39 @@ public class ClanCapitalManagementMenu implements InventoryHolder {
         boolean canManage = isLeader || isAssistant;
 
         switch (slot) {
-            case 18: // Back button
+            case 22: // Back button
                 plugin.getGuiManager().openClanTerritoriesMenu(clicker, clan);
                 break;
             case 10: // Move Home Point
                 if (!canManage) {
                     plugin.getMessages().send(clicker, "gui.capital.no-permission");
-                    clicker.closeInventory();
                     return;
                 }
-                // TODO: Implement logic to move home point
                 plugin.getMessages().send(clicker, "gui.capital.move-home.action");
                 clicker.closeInventory();
                 break;
             case 12: // Transfer Capital Base
                 if (!canManage) {
                     plugin.getMessages().send(clicker, "gui.capital.no-permission");
-                    clicker.closeInventory();
                     return;
                 }
                 if (isAtWar) {
                     plugin.getMessages().send(clicker, "gui.capital.war-blocked");
-                    clicker.closeInventory();
                     return;
                 }
-                // TODO: Implement logic to transfer capital base
                 plugin.getMessages().send(clicker, "gui.capital.transfer.action");
                 clicker.closeInventory();
                 break;
             case 14: // Disband Capital Base
                 if (!canManage) {
                     plugin.getMessages().send(clicker, "gui.capital.no-permission");
-                    clicker.closeInventory();
                     return;
                 }
                 if (isAtWar) {
                     plugin.getMessages().send(clicker, "gui.capital.war-blocked");
-                    clicker.closeInventory();
                     return;
                 }
-                // TODO: Implement logic to disband capital base
                 plugin.getMessages().send(clicker, "gui.capital.disband.action");
-                clicker.closeInventory();
-                break;
-            case 16: // Expand Territory
-                if (!canManage) {
-                    plugin.getMessages().send(clicker, "gui.capital.no-permission");
-                    clicker.closeInventory();
-                    return;
-                }
-                // TODO: Implement logic to expand territory (Task 4)
-                plugin.getMessages().send(clicker, "gui.capital.expand.action");
-                clicker.closeInventory();
-                break;
-            case 22: // Clan Hearth Settings
-                if (!canManage) {
-                    plugin.getMessages().send(clicker, "gui.capital.no-permission");
-                    clicker.closeInventory();
-                    return;
-                }
-                // TODO: Implement logic for Clan Hearth (Task 5)
-                plugin.getMessages().send(clicker, "gui.capital.hearth.action");
                 clicker.closeInventory();
                 break;
         }

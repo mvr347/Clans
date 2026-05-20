@@ -21,6 +21,8 @@ clans:
   name:
     min-length: 4
     max-length: 10
+  creation-cooldown-seconds: 86400
+  creation-cost: 10000.0
   default-tag-color: "<gold>"
   available-colors:
     white: { tag: "<white>", material: WHITE_WOOL, name: "Белый" }

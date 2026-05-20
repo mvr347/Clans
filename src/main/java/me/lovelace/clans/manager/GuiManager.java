@@ -11,7 +11,6 @@ import me.lovelace.clans.gui.ClanMembersMenu;
 import me.lovelace.clans.gui.ClanMenuHolder; // Добавлено
 import me.lovelace.clans.gui.ClanMenuType; // Добавлено
 import me.lovelace.clans.gui.ClanOtherTerritoriesMenu;
-import me.lovelace.clans.gui.ClanQuestsMenu;
 import me.lovelace.clans.gui.ClanSettingsMenu;
 import me.lovelace.clans.gui.ClanSpiritMenu;
 import me.lovelace.clans.gui.ClanTerritoriesMenu;
@@ -75,10 +74,6 @@ public class GuiManager implements Listener {
         applicationsMenu.open(player, clan);
     }
 
-    public void openQuests(Player player, Clan clan) {
-        new ClanQuestsMenu(plugin, clan).open(player, clan);
-    }
-
     // ── Territory menus ────────────────────────────────────────────────────────
 
     public void openSpiritMenu(Player player, Clan clan) {
@@ -124,6 +119,10 @@ public class GuiManager implements Listener {
 
     public void openClanList(Player player) {
         new ClanListMenu(plugin, player).open();
+    }
+
+    public void clearPlayerCache(java.util.UUID playerId) {
+        applicationsMenu.clearPlayer(playerId);
     }
 
     // ── Click routing for new InventoryHolder menus ────────────────────────────

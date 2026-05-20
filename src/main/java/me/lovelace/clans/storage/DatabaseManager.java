@@ -203,25 +203,7 @@ public final class DatabaseManager implements AutoCloseable {
                     )
                     """);
 
-            try {
-                statement.executeUpdate("DROP TABLE IF EXISTS player_quest_progress");
-            } catch (SQLException e) {
-                plugin.getLogger().log(Level.WARNING, "Failed to drop old player_quest_progress table (may not exist): " + e.getMessage());
-            }
 
-            statement.executeUpdate("""
-                    CREATE TABLE IF NOT EXISTS clan_quest_progress (
-                        clan_id VARCHAR(36) NOT NULL,
-                        quest_id VARCHAR(64) NOT NULL,
-                        objective_progress TEXT NOT NULL,
-                        completed TINYINT NOT NULL,
-                        claimed TINYINT NOT NULL,
-                        last_reset BIGINT NOT NULL,
-                        PRIMARY KEY (clan_id, quest_id),
-                        FOREIGN KEY (clan_id) REFERENCES clans(id) ON DELETE CASCADE
-                    )
-                    """);
-                    
             // History for Clan Spirit
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS clan_spirit_history (

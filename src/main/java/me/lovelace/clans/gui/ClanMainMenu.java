@@ -27,7 +27,7 @@ public final class ClanMainMenu implements InventoryHolder {
 
     public void open() {
         this.inventory = Bukkit.createInventory(this, 54,
-                plugin.getMessages().component("gui.main.title", Map.of("clan", clan.tagColor() + clan.name()), player));
+                plugin.getMessages().component("gui.main.title", Map.of("clan", clan.name(), "color", clan.tagColor()), player));
 
         for (int i = 0; i < 54; i++) {
             inventory.setItem(i, ItemBuilder.of(Material.GRAY_STAINED_GLASS_PANE).name(Component.empty()).build());
@@ -35,9 +35,9 @@ public final class ClanMainMenu implements InventoryHolder {
 
         // Row 0 — clan info (center)
         inventory.setItem(4, ItemBuilder.of(clan.emblem())
-                .name(plugin.getMessages().component("gui.main.info.name", Map.of("clan", clan.tagColor() + clan.name()), player))
+                .name(plugin.getMessages().component("gui.main.info.name", Map.of("clan", clan.name()), player))
                 .lore(plugin.getMessages().component("gui.main.info.tag",
-                        Map.of("tag", clan.tagColor() + clan.tag()), player))
+                        Map.of("tag", clan.tag()), player))
                 .lore(plugin.getMessages().component("gui.main.info.level",
                         Map.of("level", String.valueOf(clan.level())), player))
                 .lore(plugin.getMessages().component("gui.main.info.members",
@@ -89,20 +89,20 @@ public final class ClanMainMenu implements InventoryHolder {
                         : plugin.getMessages().component("gui.main.applications.no-permission-lore", player))
                 .build());
 
-        // Row 5 — Quests, Close, Leave
-        inventory.setItem(46, ItemBuilder.head(ItemBuilder.HEAD_QUEST)
-                .name(plugin.getMessages().component("gui.main.quests.name", player))
-                .lore(plugin.getMessages().component("gui.main.quests.lore", player))
-                .build());
-
+        // Row 5 — Close + Leave (only for non-leaders)
         inventory.setItem(49, ItemBuilder.of(Material.BARRIER)
                 .name(plugin.getMessages().component("gui.close", player))
                 .build());
 
-        inventory.setItem(52, ItemBuilder.of(Material.RED_BED)
-                .name(plugin.getMessages().component("gui.main.leave.name", player))
-                .lore(plugin.getMessages().component("gui.main.leave.lore", player))
-                .build());
+        boolean isLeader = clan.member(player.getUniqueId())
+                .map(m -> m.rank() == ClanRank.LEADER)
+                .orElse(false);
+        if (!isLeader) {
+            inventory.setItem(52, ItemBuilder.of(Material.RED_BED)
+                    .name(plugin.getMessages().component("gui.main.leave.name", player))
+                    .lore(plugin.getMessages().component("gui.main.leave.lore", player))
+                    .build());
+        }
 
         player.openInventory(inventory);
     }
@@ -113,7 +113,7 @@ public final class ClanMainMenu implements InventoryHolder {
             case 21 -> plugin.getGuiManager().openDiplomacySelect(clicker, clan);
             case 23 -> plugin.getGuiManager().openClanTerritoriesMenu(clicker, clan);
             case 25 -> plugin.getGuiManager().openUpgrades(clicker, clan);
-            case 38 -> plugin.getGuiManager().openSpiritMenu(clicker, clan);
+            case 38 -> plugin.getGuiManager().openSpirit(clicker, clan);
             case 40 -> plugin.getGuiManager().openSettings(clicker, clan);
             case 42 -> {
                 boolean canViewApps = clan.member(clicker.getUniqueId())
@@ -125,19 +125,24 @@ public final class ClanMainMenu implements InventoryHolder {
                     plugin.getMessages().send(clicker, "general.no-permission");
                 }
             }
-            case 46 -> plugin.getGuiManager().openQuests(clicker, clan);
             case 49 -> clicker.closeInventory();
             case 52 -> {
-                plugin.getClanManager().removeMemberAsync(clan, clicker.getUniqueId(),
-                                clicker.getUniqueId(), false)
-                        .thenRun(() -> plugin.runSync(() -> {
-                            plugin.getMessages().send(clicker, "clan.left");
-                            clicker.closeInventory();
-                        }))
-                        .exceptionally(t -> {
-                            plugin.runSync(() -> plugin.sendOperationError(clicker, t));
-                            return null;
-                        });
+                boolean isLeader = clan.member(clicker.getUniqueId())
+                        .map(m -> m.rank() == ClanRank.LEADER)
+                        .orElse(false);
+                if (isLeader) return;
+
+                plugin.getGuiManager().openConfirm(clicker, clan, 
+                        plugin.getMessages().component("gui.confirm.leave.title", clicker), 
+                        Component.empty(),
+                        () -> plugin.getClanManager().removeMemberAsync(clan, clicker.getUniqueId(), clicker.getUniqueId(), false)
+                                .thenRun(() -> plugin.runSync(() -> {
+                                    plugin.getMessages().send(clicker, "clan.left");
+                                    clicker.closeInventory();
+                                }))
+                                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(clicker, t)); return null; }),
+                        () -> plugin.runSync(this::open)
+                );
             }
             default -> {}
         }

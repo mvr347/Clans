@@ -12,6 +12,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public final class PlayerConnectionListener implements Listener {
     private final ClansPlugin plugin;
@@ -28,15 +29,19 @@ public final class PlayerConnectionListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        plugin.getClanManager().updateLastSeen(player.getUniqueId(), System.currentTimeMillis());
-        
-        // Handle banner drop if holding it during war
-        Optional<Clan> clanOpt = plugin.getClanManager().getPlayerClan(player.getUniqueId());
+        UUID playerId = player.getUniqueId();
+
+        plugin.getClanManager().updateLastSeen(playerId, System.currentTimeMillis());
+
+        plugin.getChatInputListener(playerId);
+
+        plugin.getGuiManager().clearPlayerCache(playerId);
+
+        Optional<Clan> clanOpt = plugin.getClanManager().getPlayerClan(playerId);
         if (clanOpt.isPresent()) {
             for (ClanWar war : plugin.getWarManager().activeWars()) {
-                if (war.capturedBannerBy() != null && war.capturedBannerBy().equals(player.getUniqueId())) {
+                if (war.capturedBannerBy() != null && war.capturedBannerBy().equals(playerId)) {
                     plugin.getWarManager().resetBannerCapture(war.id());
-                    // Remove banner from inventory
                     for (int i = 0; i < player.getInventory().getSize(); i++) {
                         ItemStack item = player.getInventory().getItem(i);
                         if (item != null && item.getType().name().endsWith("_BANNER")) {

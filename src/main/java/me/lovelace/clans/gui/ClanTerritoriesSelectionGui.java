@@ -30,7 +30,8 @@ public class ClanTerritoriesSelectionGui implements Listener {
         this.plugin = plugin;
         this.clan = clan;
         this.player = player;
-        this.inventory = Bukkit.createInventory(null, 3 * 9, plugin.getMessages().component("gui.territories.title"));
+        this.inventory = Bukkit.createInventory(null, 3 * 9,
+                plugin.getMessages().component("gui.territories-selection-title", Map.of("clan", clan.name()), player));
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         setupItems();
     }
@@ -105,6 +106,10 @@ public class ClanTerritoriesSelectionGui implements Listener {
                     .build();
         }
         inventory.setItem(15, otherTerritoriesItem);
+
+        inventory.setItem(22, ItemBuilder.head(ItemBuilder.HEAD_BACK)
+                .name(plugin.getMessages().component("gui.back", player))
+                .build());
     }
 
     public void open() {
@@ -116,6 +121,14 @@ public class ClanTerritoriesSelectionGui implements Listener {
         if (!event.getInventory().equals(inventory)) {
             return;
         }
+
+        if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) {
+            if (event.isShiftClick()) {
+                event.setCancelled(true);
+            }
+            return;
+        }
+
         event.setCancelled(true);
 
         if (!(event.getWhoClicked() instanceof Player clicker)) {
@@ -135,6 +148,11 @@ public class ClanTerritoriesSelectionGui implements Listener {
         boolean isManagement = clan.hasMember(player.getUniqueId()) &&
                 (clan.member(player.getUniqueId()).get().rank() == ClanRank.LEADER ||
                         clan.member(player.getUniqueId()).get().rank() == ClanRank.GUARDIAN);
+
+        if (slot == 22) {
+            plugin.getGuiManager().openMain(player, clan);
+            return;
+        }
 
         if (slot == 11) {
             if (isManagement) {

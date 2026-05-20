@@ -37,7 +37,7 @@ public final class ClanMembersMenu {
         int inventorySize = Math.max(27, Math.min(54, requiredRows * 9));
 
         Inventory inventory = Bukkit.createInventory(new ClanMenuHolder(ClanMenuType.MEMBERS, clan.id()), inventorySize,
-                plugin.getMessages().component("gui.members-title", Map.of("tag", clan.tag()), player));
+                plugin.getMessages().component("gui.members-title", Map.of("tag", clan.tag(), "color", clan.tagColor()), player));
 
         fillGlass(inventory);
 

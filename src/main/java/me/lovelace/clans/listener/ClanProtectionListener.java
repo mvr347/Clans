@@ -161,22 +161,43 @@ public class ClanProtectionListener implements Listener {
         String bannerType = pdc.get(ClanItemFactory.BANNER_TYPE_KEY, PersistentDataType.STRING);
         String clanIdString = pdc.get(ClanItemFactory.CLAN_ID_KEY, PersistentDataType.STRING);
 
-        if (!"CAPITAL".equals(bannerType) || clanIdString == null) {
-            return; // Not a Capital Banner
+        if (bannerType == null || clanIdString == null) {
+            return;
         }
 
         UUID clanId = UUID.fromString(clanIdString);
         Optional<Clan> clanOpt = clanManager.getClanById(clanId);
 
         if (clanOpt.isEmpty()) {
-            return; // Clan not found
+            return;
         }
 
         Clan clan = clanOpt.get();
         Player player = event.getPlayer();
 
+        if ("TERRITORY".equals(bannerType)) {
+            if (clan.member(player.getUniqueId()).map(m -> m.rank() == ClanRank.LEADER).orElse(false)) {
+                event.setCancelled(true);
+                clan.territories().stream()
+                        .filter(t -> !t.isCapital()
+                                && t.bannerX() != null
+                                && t.bannerX() == clickedBlock.getX()
+                                && t.bannerY() != null
+                                && t.bannerY() == clickedBlock.getY()
+                                && t.bannerZ() != null
+                                && t.bannerZ() == clickedBlock.getZ())
+                        .findFirst()
+                        .ifPresent(territory -> plugin.getGuiManager().openTerritorySettings(player, clan, territory));
+            }
+            return;
+        }
+
+        if (!"CAPITAL".equals(bannerType)) {
+            return;
+        }
+
         // Check if player is Guildmaster of this clan
-        if (clan.hasMember(player.getUniqueId()) && clan.member(player.getUniqueId()).get().rank() == ClanRank.LEADER) {
+        if (clan.member(player.getUniqueId()).map(m -> m.rank() == ClanRank.LEADER).orElse(false)) {
             event.setCancelled(true);
             plugin.getGuiManager().openClanCapitalManagementMenu(player, clan);
         } else {

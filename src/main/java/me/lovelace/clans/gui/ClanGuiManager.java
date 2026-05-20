@@ -9,7 +9,7 @@ import me.lovelace.clans.model.ClanTerritory;
 import me.lovelace.clans.model.ClanUpgrade;
 import me.lovelace.clans.model.DiplomacyRelation;
 import me.lovelace.clans.model.TerritoryKey;
-import net.kyori.adventure.text.Component; // Added import for Component
+import net.kyori.adventure.text.Component;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClanGuiManager implements Listener {
     private final ClansPlugin plugin;
-    private final ClanMainMenu mainMenu;
     private final ClanMembersMenu membersMenu;
     private final ClanTerritoriesMenu territoriesMenu;
     private final ClanUpgradesMenu upgradesMenu;
@@ -42,7 +41,6 @@ public final class ClanGuiManager implements Listener {
 
     public ClanGuiManager(ClansPlugin plugin) {
         this.plugin = plugin;
-        this.mainMenu = null; // ClanMainMenu now requires clan+player at construction time
         this.membersMenu = new ClanMembersMenu(plugin);
         this.territoriesMenu = new ClanTerritoriesMenu(plugin);
         this.upgradesMenu = new ClanUpgradesMenu(plugin);
@@ -90,11 +88,10 @@ public final class ClanGuiManager implements Listener {
         new TerritorySettingsMenu(plugin, clan, territory).open(player);
     }
 
-    // Modified signature to accept Component for title and lore
     public void openConfirm(Player player, Clan clan, Component title, Component lore, Runnable onYes, Runnable onNo) {
         confirmYes.put(player.getUniqueId(), onYes);
         confirmNo.put(player.getUniqueId(), onNo);
-        confirmMenu.open(player, clan, title, lore); // Updated call
+        confirmMenu.open(player, clan, title, lore);
     }
     
     public void openRoleSettings(Player player, Clan clan) {
@@ -105,10 +102,6 @@ public final class ClanGuiManager implements Listener {
         new ClanRankPermissionsMenu(plugin, clan, rank).open(player, clan);
     }
 
-    public void openQuests(Player player, Clan clan) {
-        new ClanQuestsMenu(plugin, clan).open(player, clan);
-    }
-    
     public void openSpirit(Player player, Clan clan) {
         new ClanSpiritMenu(plugin, clan).open(player);
     }
@@ -118,6 +111,28 @@ public final class ClanGuiManager implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (event.getRawSlot() < 0) return;
 
+        // Cancel shift-clicks from bottom inventory into our custom GUIs
+        if (event.getView().getTopInventory().getHolder() != null &&
+            (event.getView().getTopInventory().getHolder() instanceof ClanMenuHolder ||
+             event.getView().getTopInventory().getHolder() instanceof ClanMainMenu ||
+             event.getView().getTopInventory().getHolder() instanceof ClanCreateMenu ||
+             event.getView().getTopInventory().getHolder() instanceof ClanListMenu ||
+             event.getView().getTopInventory().getHolder() instanceof ClanInfoMenu ||
+             event.getView().getTopInventory().getHolder() instanceof ClanCapitalManagementMenu ||
+             event.getView().getTopInventory().getHolder() instanceof TerritorySettingsMenu ||
+             event.getView().getTopInventory().getHolder() instanceof ClanSpiritMenu)) {
+             
+             if (event.getRawSlot() >= event.getView().getTopInventory().getSize() && event.isShiftClick()) {
+                 event.setCancelled(true);
+             }
+        }
+
+        if (event.getView().getTopInventory().getHolder() instanceof ClanMainMenu mainMenu) {
+            if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
+            event.setCancelled(true);
+            mainMenu.handleInventoryClick(player, event.getRawSlot());
+            return;
+        }
         if (event.getView().getTopInventory().getHolder() instanceof ClanCreateMenu createMenu) {
             if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
             event.setCancelled(true);
@@ -144,7 +159,7 @@ public final class ClanGuiManager implements Listener {
                 if (clan.isOpen()) {
                     plugin.getClanManager().applyToClanAsync(clan, player.getUniqueId())
                             .thenRun(() -> plugin.runSync(() -> {
-                                plugin.getMessages().send(player, "clan.applied", Map.of("clan", clan.name()));
+                                plugin.getMessages().send(player, "clan.applied", Map.of("tag", clan.tag()));
                                 player.closeInventory();
                             }))
                             .exceptionally(t -> {
@@ -167,14 +182,7 @@ public final class ClanGuiManager implements Listener {
             tsMenu.handleInventoryClick(player, event.getRawSlot());
             return;
         }
-        if (event.getView().getTopInventory().getHolder() instanceof ClanQuestsMenu questsMenu) {
-            if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
-            event.setCancelled(true);
-            Optional<Clan> optionalClan = plugin.getClanManager().getClanById(questsMenu.clanId());
-            if (optionalClan.isEmpty()) { player.closeInventory(); return; }
-            questsMenu.handleInventoryClick(player, optionalClan.get(), event.getRawSlot());
-            return;
-        }
+
         if (event.getView().getTopInventory().getHolder() instanceof ClanSpiritMenu spiritMenu) {
             if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
             event.setCancelled(true);
@@ -191,7 +199,6 @@ public final class ClanGuiManager implements Listener {
         Clan clan = optionalClan.get();
 
         switch (holder.type()) {
-            case MAIN -> handleMainClick(event.getRawSlot(), player, clan);
             case MEMBERS -> handleMembersClick(event.getRawSlot(), player, clan);
             case TERRITORIES -> territoriesMenu.handleTerritoryClick(player, clan, event.getRawSlot(), event.isRightClick());
             case UPGRADES -> handleUpgradesClick(event.getRawSlot(), player, clan);
@@ -199,12 +206,11 @@ public final class ClanGuiManager implements Listener {
             case APPLICATIONS -> applicationsMenu.handleInventoryClick(event, player, clan);
             case CONFIRM -> handleConfirmClick(event.getRawSlot(), player);
             case DIPLOMACY -> handleDiplomacyClick(event.getRawSlot(), player, clan);
-            case DIPLOMACY_SELECT -> {}
             case MEMBER_DETAIL -> handleMemberDetailClick(event, player, clan);
             case COLOR_PICKER -> handleColorPickerClick(event.getRawSlot(), player, clan);
             case ROLE_SETTINGS -> handleRoleSettingsClick(event.getRawSlot(), player, clan);
             case RANK_PERMISSIONS -> handleRankPermissionsClick(event, player, clan);
-            case TERRITORY_SETTINGS -> {} // Handled above
+            default -> {}
         }
     }
 
@@ -245,50 +251,6 @@ public final class ClanGuiManager implements Listener {
         } catch (IllegalArgumentException ignored) {}
     }
 
-    private void handleMainClick(int slot, Player player, Clan clan) {
-        switch (slot) {
-            case 20 -> openMembers(player, clan);
-            case 22 -> openTerritories(player, clan);
-            case 24 -> openUpgrades(player, clan);
-            case 29 -> openDiplomacySelect(player, clan);
-            case 31 -> openSpirit(player, clan); // Clan Spirit
-            case 33 -> {
-                if (!isGuildmaster(clan, player.getUniqueId())) {
-                    plugin.getMessages().send(player, "general.no-permission"); return;
-                }
-                openApplications(player, clan);
-            }
-            case 39 -> openQuests(player, clan);
-            case 41 -> openSettings(player, clan);
-            case 49 -> player.closeInventory(); // Close button
-            case 53 -> { // Leave/Disband button
-                boolean guildmaster = isGuildmaster(clan, player.getUniqueId());
-                if (guildmaster) {
-                    openConfirm(player, clan, plugin.getMessages().component("gui.confirm.disband.title", player), Component.empty(), // Pass Component.empty() for lore
-                        () -> {
-                            player.closeInventory();
-                            plugin.getClanManager().disbandClanAsync(clan, player.getUniqueId())
-                                .thenRun(() -> plugin.runSync(() -> plugin.getMessages().send(player, "clan.disbanded")))
-                                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
-                        },
-                        () -> plugin.runSync(() -> openMain(player, clan))
-                    );
-                } else {
-                    openConfirm(player, clan, plugin.getMessages().component("gui.confirm.leave.title", player), Component.empty(), // Pass Component.empty() for lore
-                        () -> plugin.getClanManager().removeMemberAsync(clan, player.getUniqueId(), player.getUniqueId(), false)
-                                .thenRun(() -> plugin.runSync(() -> {
-                                    plugin.getMessages().send(player, "clan.left");
-                                    player.closeInventory();
-                                }))
-                                .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; }),
-                        () -> plugin.runSync(() -> openMain(player, clan))
-                    );
-                }
-            }
-            default -> {}
-        }
-    }
-
     private void handleMembersClick(int slot, Player player, Clan clan) {
         int inventorySize = player.getOpenInventory().getTopInventory().getSize();
         int backButtonSlot = inventorySize - 5;
@@ -314,7 +276,6 @@ public final class ClanGuiManager implements Listener {
                         return;
                     }
                     plugin.getServer().dispatchCommand(player, "clan invite " + inputName);
-                    // Reopen the menu slightly later so any error messages have time to appear first
                     plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                        if (plugin.getClanManager().getPlayerClan(player.getUniqueId()).isPresent()) {
                            openMembers(player, plugin.getClanManager().getPlayerClan(player.getUniqueId()).get());
@@ -371,12 +332,12 @@ public final class ClanGuiManager implements Listener {
     }
 
     private void handleSettingsClick(int slot, Player player, Clan clan) {
-        if (slot == 49) { openMain(player, clan); return; }
+        if (slot == 13) { openMain(player, clan); return; }
         if (!clan.hasPermission(player.getUniqueId(), ClanPermission.SETTINGS)) {
             plugin.getMessages().send(player, "general.no-permission"); return;
         }
         switch (slot) {
-            case 10 -> {
+            case 1 -> {
                 player.closeInventory();
                 plugin.getMessages().send(player, "gui.settings.rename.prompt");
                 plugin.expectChatInput(player.getUniqueId(), (newName, isCancelled) -> {
@@ -403,7 +364,7 @@ public final class ClanGuiManager implements Listener {
                     );
                 });
             }
-            case 12 -> {
+            case 2 -> {
                 player.closeInventory();
                 plugin.getMessages().send(player, "gui.settings.change-tag.prompt");
                 plugin.expectChatInput(player.getUniqueId(), (newTag, isCancelled) -> {
@@ -431,7 +392,7 @@ public final class ClanGuiManager implements Listener {
                     );
                 });
             }
-            case 14 -> {
+            case 3 -> {
                 ItemStack inHand = player.getInventory().getItemInMainHand();
                 if (!inHand.getType().name().endsWith("_BANNER")) {
                     plugin.getMessages().send(player, "gui.settings.change-banner.no-banner-in-hand"); return;
@@ -444,8 +405,8 @@ public final class ClanGuiManager implements Listener {
                     }))
                     .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
             }
-            case 16 -> openColorPicker(player, clan);
-            case 20 -> { // Toggle clan open/closed status
+            case 4 -> openColorPicker(player, clan);
+            case 5 -> { // Toggle clan open/closed status
                 openConfirm(player, clan, clan.isOpen() ? plugin.getMessages().component("gui.confirm.close-clan.title", player) : plugin.getMessages().component("gui.confirm.open-clan.title", player), Component.empty(),
                     () -> plugin.getClanManager().setClanOpenStatusAsync(clan, player.getUniqueId(), !clan.isOpen())
                         .thenAccept(updated -> plugin.runSync(() -> {
@@ -456,8 +417,8 @@ public final class ClanGuiManager implements Listener {
                     () -> plugin.runSync(() -> openSettings(player, clan))
                 );
             }
-            case 22 -> openRoleSettings(player, clan);
-            case 28 -> { // Disband button
+            case 6 -> openRoleSettings(player, clan);
+            case 7 -> { // Disband button
                 if (!isGuildmaster(clan, player.getUniqueId())) {
                     plugin.getMessages().send(player, "general.no-permission"); return;
                 }
@@ -506,34 +467,26 @@ public final class ClanGuiManager implements Listener {
         if (relation == null) return;
 
         if (relation == DiplomacyRelation.ALLY) {
-            // Alliance request system
             if (sourceClan.relationTo(targetClan.id()) == DiplomacyRelation.ALLY) {
-                // Revoke alliance → neutral
                 plugin.getClanManager().setDiplomacyAsync(sourceClan, targetClan, DiplomacyRelation.NEUTRAL, player.getUniqueId())
                     .thenAccept(updated -> plugin.runSync(() -> {
-                        plugin.getMessages().send(player, "diplomacy.updated",
-                                Map.of("tag", targetClan.tag(), "relation", "NEUTRAL"));
+                        plugin.getMessages().send(player, "diplomacy.updated", Map.of("tag", targetClan.tag(), "relation", "NEUTRAL"));
                         openDiplomacy(player, updated, targetClan);
                     }))
                     .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
                 return;
             }
-            // Check if target already sent request to us
             if (plugin.getClanManager().hasPendingAllianceFrom(targetClan.id(), sourceClan.id())) {
-                // Accept their request
                 plugin.getClanManager().acceptAllianceAsync(sourceClan, targetClan, player.getUniqueId())
                     .thenRun(() -> plugin.runSync(() -> {
-                        plugin.getMessages().send(player, "diplomacy.alliance-accepted",
-                                Map.of("tag", targetClan.tag()));
+                        plugin.getMessages().send(player, "diplomacy.alliance-accepted", Map.of("tag", targetClan.tag()));
                         plugin.getClanManager().getOnlineLeader(targetClan).ifPresent(leader ->
-                                plugin.getMessages().send(leader, "diplomacy.alliance-accepted-by",
-                                        Map.of("tag", sourceClan.tag())));
+                                plugin.getMessages().send(leader, "diplomacy.alliance-accepted-by", Map.of("tag", sourceClan.tag())));
                         openDiplomacy(player, sourceClan, targetClan);
                     }))
                     .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
                 return;
             }
-            // Send request
             plugin.getClanManager().addAllianceRequest(sourceClan.id(), targetClan.id());
             plugin.getMessages().send(player, "diplomacy.alliance-sent", Map.of("tag", targetClan.tag()));
             plugin.getClanManager().getOnlineLeader(targetClan).ifPresent(leader ->
@@ -544,8 +497,7 @@ public final class ClanGuiManager implements Listener {
 
         plugin.getClanManager().setDiplomacyAsync(sourceClan, targetClan, relation, player.getUniqueId())
             .thenAccept(updated -> plugin.runSync(() -> {
-                plugin.getMessages().send(player, "diplomacy.updated",
-                        Map.of("tag", targetClan.tag(), "relation", relation.name()));
+                plugin.getMessages().send(player, "diplomacy.updated", Map.of("tag", targetClan.tag(), "relation", relation.name()));
                 openDiplomacy(player, updated, targetClan);
             }))
             .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
@@ -557,8 +509,7 @@ public final class ClanGuiManager implements Listener {
 
         ItemStack item = event.getCurrentItem();
         if (item == null || !item.hasItemMeta()) return;
-        String rawId = item.getItemMeta().getPersistentDataContainer()
-                .get(memberKey, PersistentDataType.STRING);
+        String rawId = item.getItemMeta().getPersistentDataContainer().get(memberKey, PersistentDataType.STRING);
         if (rawId == null) return;
 
         UUID targetId;
@@ -569,27 +520,23 @@ public final class ClanGuiManager implements Listener {
         ClanRank targetRank = targetMemberOpt.get().rank();
 
         switch (slot) {
-            case 14 -> { // Promote
+            case 14 -> {
                 ClanRank newRank = targetRank.nextRank();
                 if (newRank != null) {
                     plugin.getClanManager().setRankAsync(clan, player.getUniqueId(), targetId, newRank)
-                        .thenAccept(updated -> plugin.runSync(() -> {
-                            openMemberDetail(player, updated, targetId);
-                        }))
+                        .thenAccept(updated -> plugin.runSync(() -> openMemberDetail(player, updated, targetId)))
                         .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
                 }
             }
-            case 15 -> { // Demote
+            case 15 -> {
                 ClanRank newRank = targetRank.previousRank();
                 if (newRank != null) {
                     plugin.getClanManager().setRankAsync(clan, player.getUniqueId(), targetId, newRank)
-                        .thenAccept(updated -> plugin.runSync(() -> {
-                            openMemberDetail(player, updated, targetId);
-                        }))
+                        .thenAccept(updated -> plugin.runSync(() -> openMemberDetail(player, updated, targetId)))
                         .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
                 }
             }
-            case 16 -> { // Kick
+            case 16 -> {
                 plugin.getClanManager().removeMemberAsync(clan, player.getUniqueId(), targetId, true)
                     .thenRun(() -> plugin.runSync(() -> {
                         plugin.getMessages().send(player, "clan.kicked", Map.of("player", nameOf(targetId)));
@@ -597,12 +544,10 @@ public final class ClanGuiManager implements Listener {
                     }))
                     .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; });
             }
-            case 12 -> { // Transfer leadership
+            case 12 -> {
                 openConfirm(player, clan, plugin.getMessages().component("gui.confirm.transfer.title", player), Component.empty(),
                     () -> plugin.getClanManager().transferLeadershipAsync(clan, player.getUniqueId(), targetId)
-                        .thenRun(() -> plugin.runSync(() -> {
-                            openMembers(player, clan);
-                        }))
+                        .thenRun(() -> plugin.runSync(() -> openMembers(player, clan)))
                         .exceptionally(t -> { plugin.runSync(() -> plugin.sendOperationError(player, t)); return null; }),
                     () -> plugin.runSync(() -> openMemberDetail(player, clan, targetId))
                 );
@@ -615,8 +560,7 @@ public final class ClanGuiManager implements Listener {
         if (slot == 22) { openSettings(player, clan); return; }
         ItemStack item = player.getOpenInventory().getTopInventory().getItem(slot);
         if (item == null || !item.hasItemMeta()) return;
-        String colorTag = item.getItemMeta().getPersistentDataContainer()
-                .get(memberKey, PersistentDataType.STRING);
+        String colorTag = item.getItemMeta().getPersistentDataContainer().get(memberKey, PersistentDataType.STRING);
         if (colorTag == null) return;
         plugin.getClanManager().changeTagColorAsync(clan, player.getUniqueId(), colorTag)
             .thenAccept(updated -> plugin.runSync(() -> {
@@ -634,6 +578,4 @@ public final class ClanGuiManager implements Listener {
         String name = org.bukkit.Bukkit.getOfflinePlayer(id).getName();
         return name != null ? name : id.toString();
     }
-
-    // Removed unused promote/demote methods
 }

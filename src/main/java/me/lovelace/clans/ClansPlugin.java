@@ -11,10 +11,8 @@ import me.lovelace.clans.listener.ChatInputListener;
 import me.lovelace.clans.listener.ClanProtectionListener;
 import me.lovelace.clans.listener.CombatListener;
 import me.lovelace.clans.listener.PlayerConnectionListener;
-import me.lovelace.clans.listener.QuestListener;
 import me.lovelace.clans.manager.ArtifactManager;
 import me.lovelace.clans.manager.ClanManager;
-import me.lovelace.clans.manager.QuestManager;
 import me.lovelace.clans.manager.RitualManager;
 import me.lovelace.clans.manager.SpiritManager;
 import me.lovelace.clans.manager.SuccessionManager;
@@ -23,7 +21,6 @@ import me.lovelace.clans.service.MessageService;
 import me.lovelace.clans.storage.ClanStorage;
 import me.lovelace.clans.storage.DatabaseManager;
 import me.lovelace.clans.storage.SqlClanStorage;
-import me.lovelace.clans.storage.SqlQuestStorage;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -53,7 +50,6 @@ public final class ClansPlugin extends JavaPlugin {
     private SuccessionManager successionManager;
     private SpiritManager spiritManager;
     private ArtifactManager artifactManager;
-    private QuestManager questManager;
     private GuiManager guiManager;
     private ClanGuiManager clanGuiManager;
     private AdvancedClaimsHook advancedClaimsHook;
@@ -79,14 +75,11 @@ public final class ClansPlugin extends JavaPlugin {
         successionManager = new SuccessionManager(this);
         spiritManager = new SpiritManager(this);
         artifactManager = new ArtifactManager(this);
-        questManager = new QuestManager(this, new SqlQuestStorage(this, databaseManager), clanManager);
         guiManager = new GuiManager(this);
         clanGuiManager = new ClanGuiManager(this);
         advancedClaimsHook = new AdvancedClaimsHook(this);
 
         clanManager.loadAsync().thenRunAsync(() -> {
-            questManager.loadQuests();
-
             runSync(() -> {
                 ClansAPI.init(this);
 
@@ -244,6 +237,11 @@ public final class ClansPlugin extends JavaPlugin {
             clansCommand.setExecutor(executor);
             clansCommand.setTabCompleter(executor);
         }
+        PluginCommand adminCommand = getCommand("clansadmin");
+        if (adminCommand != null) {
+            adminCommand.setExecutor(executor);
+            adminCommand.setTabCompleter(executor);
+        }
     }
 
     private void registerListeners() {
@@ -256,7 +254,6 @@ public final class ClansPlugin extends JavaPlugin {
         pluginManager.registerEvents(new CombatListener(this), this);
         pluginManager.registerEvents(new ArtifactListener(this), this);
         pluginManager.registerEvents(new ChatInputListener(this), this);
-        pluginManager.registerEvents(new QuestListener(this, questManager, clanManager), this);
         pluginManager.registerEvents(spiritManager, this);
     }
 

@@ -23,6 +23,11 @@ commands:
     description: Open clan list.
     usage: /clans
     permission: clans.command
+  clansadmin:
+    description: Admin commands for Clans plugin.
+    usage: /clansadmin <reload|delete|setspirit>
+    aliases: [ ca ]
+    permission: clans.admin
 
 permissions:
   clans.command:
